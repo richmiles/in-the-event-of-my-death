@@ -215,9 +215,7 @@ export default function Home() {
   return (
     <div className="home">
       <div className="hero-form">
-        <p className="tagline">Create encrypted secrets that unlock on a specific date.</p>
-        <p className="security-note">Encrypted in your browser. We never see your plaintext.</p>
-
+        <p className="hero-title">In The Event Of My Death</p>
         <form onSubmit={handleSubmit} className="inline-form">
           <div className="message-input-container">
             <textarea
@@ -300,6 +298,8 @@ export default function Home() {
           <button type="submit" className="button primary full-width send-button" disabled={!isValid}>
             Send
           </button>
+
+          <p className="security-note">Encrypted in your browser. We never see your plaintext.</p>
 
           {error && <div className="error-message">{error}</div>}
         </form>

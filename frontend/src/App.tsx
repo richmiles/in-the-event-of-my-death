@@ -10,14 +10,6 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app">
-        <header>
-          <nav>
-            <Link to="/" className="logo">
-              In The Event Of My Death
-            </Link>
-          </nav>
-        </header>
-
         <main>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -28,9 +20,9 @@ function App() {
           </Routes>
         </main>
 
-        <footer>
+        <footer className="site-footer">
           <div className="footer-content">
-            <div className="footer-links">
+            <p className="footer-line">
               <Link to="/about">About</Link>
               <span className="footer-separator">|</span>
               <a
@@ -40,8 +32,9 @@ function App() {
               >
                 Open Source
               </a>
-            </div>
-            <p>Built with end-to-end encryption. Your data stays yours.</p>
+              <span className="footer-separator">–</span>
+              <span>Built with end-to-end encryption; your data stays yours.</span>
+            </p>
           </div>
         </footer>
       </div>

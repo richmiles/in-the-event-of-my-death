@@ -21,6 +21,8 @@
   /* States */
   --success: #4ADE80;
   --danger: #F87171;
+
+  --content-narrow: 540px;
 }
 
 /* Reset and base styles */
@@ -55,34 +57,6 @@ a {
   flex-direction: column;
 }
 
-/* Header */
-header {
-  background: var(--bg-secondary);
-  padding: 1rem 2rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-nav {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.logo {
-  color: var(--text-primary);
-  text-decoration: none;
-  font-size: 1.25rem;
-  font-weight: 600;
-  letter-spacing: -0.5px;
-  transition: opacity 0.2s;
-}
-
-.logo:hover {
-  opacity: 0.9;
-}
-
 .nav-link {
   color: var(--text-primary);
   text-decoration: none;
@@ -110,44 +84,37 @@ main {
 }
 
 /* Footer */
-footer {
-  background: var(--bg-secondary);
+.site-footer {
   color: var(--text-secondary);
   text-align: center;
-  padding: 2rem;
-  margin-top: 2rem;
+  padding: 1.5rem 2rem 2.5rem;
+  margin-top: 1.5rem;
   font-size: 0.875rem;
-  border-top: 1px solid var(--border-subtle);
 }
 
 .footer-content {
-  max-width: 800px;
+  max-width: var(--content-narrow);
   margin: 0 auto;
 }
 
-.footer-links {
-  margin-bottom: 0.75rem;
+.footer-line {
+  margin: 0;
+  line-height: 1.6;
 }
 
-.footer-links a {
+.footer-line a {
   color: var(--text-secondary);
   text-decoration: none;
   transition: color 0.2s;
 }
 
-.footer-links a:hover {
+.footer-line a:hover {
   color: var(--text-primary);
 }
 
 .footer-separator {
-  margin: 0 0.75rem;
+  margin: 0 0.5rem;
   opacity: 0.5;
-}
-
-footer p {
-  margin: 0;
-  font-size: 0.8125rem;
-  opacity: 0.8;
 }
 
 /* Buttons */
@@ -264,7 +231,7 @@ textarea::placeholder {
 /* Hero form section - the main action area */
 .hero-form {
   background: var(--bg-secondary);
-  padding: 2.5rem;
+  padding: 1.5rem 2.5rem;
   border-radius: 12px;
   border: 1px solid var(--border-strong);
   margin-bottom: 3rem;
@@ -284,10 +251,13 @@ textarea::placeholder {
   line-height: 1.2;
 }
 
-.hero-form .tagline {
-  font-size: 1.125rem;
-  color: var(--text-secondary);
-  margin: 0 0 0.5rem;
+.hero-title {
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--text-subtle);
+  margin: 0 0 1.75rem;
+  text-align: center;
 }
 
 .hero-form .inline-form {
@@ -397,8 +367,9 @@ textarea::placeholder {
 
 .security-note {
   font-size: 0.875rem;
-  color: var(--text-secondary);
-  margin: 0.5rem 0 1.5rem;
+  color: var(--text-subtle);
+  margin: 1.5rem 0 0;
+  text-align: center;
 }
 
 .hero-form.success-state {
@@ -717,7 +688,7 @@ textarea::placeholder {
   }
 
   .hero-form {
-    padding: 1.75rem;
+    padding: 1.25rem 1.75rem;
     max-width: 100%;
   }
 
@@ -773,17 +744,7 @@ textarea::placeholder {
     flex-direction: column;
   }
 
-  .footer-links {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .footer-separator {
-    display: none;
-  }
-
-  footer {
+  .site-footer {
     margin-top: 1.5rem;
   }
 }
