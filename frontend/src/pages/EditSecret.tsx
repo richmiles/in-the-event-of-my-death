@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { extractFromFragment } from '../utils/urlFragments'
-import { getSecretStatus, extendUnlockDate } from '../services/api'
+import { getEditSecretStatus, extendUnlockDate } from '../services/api'
 
 type State =
   | { type: 'loading' }
@@ -28,10 +28,7 @@ export default function EditSecret() {
 
   const loadStatus = useCallback(async (editToken: string) => {
     try {
-      // Note: We're using the edit token as if it were a decrypt token here
-      // In a real implementation, you might need a separate status endpoint for edit tokens
-      // For now, we'll just try to extend with a far future date to check if the secret exists
-      const status = await getSecretStatus(editToken)
+      const status = await getEditSecretStatus(editToken)
 
       if (!status.exists || status.status === 'not_found') {
         setState({ type: 'not_found' })

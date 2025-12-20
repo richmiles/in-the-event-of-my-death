@@ -79,6 +79,17 @@ export async function getSecretStatus(decryptToken: string): Promise<SecretStatu
 }
 
 /**
+ * Check the status of a secret using the edit token.
+ * Used by the edit page to display current unlock date.
+ */
+export async function getEditSecretStatus(editToken: string): Promise<SecretStatusResponse> {
+  const response = await fetch(`${API_BASE}/secrets/edit/status`, {
+    headers: { Authorization: `Bearer ${editToken}` },
+  })
+  return handleResponse<SecretStatusResponse>(response)
+}
+
+/**
  * Retrieve a secret's encrypted content.
  * This is a ONE-TIME operation after unlock.
  */

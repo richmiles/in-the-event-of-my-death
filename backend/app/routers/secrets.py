@@ -162,3 +162,25 @@ async def get_status(
 
     status = get_secret_status(db, secret)
     return SecretStatusResponse(**status)
+
+
+@router.get("/secrets/edit/status", response_model=SecretStatusResponse)
+@limiter.limit(settings.rate_limit_retrieves)
+async def get_edit_status(
+    request: Request,
+    authorization: str = Header(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Check the status of a secret using the edit token.
+
+    Used by the edit page to display current unlock date.
+    """
+    edit_token = extract_bearer_token(authorization)
+
+    secret = find_secret_by_edit_token(db, edit_token)
+    if not secret:
+        return SecretStatusResponse(exists=False, status="not_found")
+
+    status = get_secret_status(db, secret)
+    return SecretStatusResponse(**status)
