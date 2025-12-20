@@ -3,6 +3,7 @@ import Home from './pages/Home'
 import CreateSecret from './pages/CreateSecret'
 import ViewSecret from './pages/ViewSecret'
 import EditSecret from './pages/EditSecret'
+import About from './pages/About'
 import './App.css'
 
 function App() {
@@ -14,9 +15,6 @@ function App() {
             <Link to="/" className="logo">
               In The Event Of My Death
             </Link>
-            <Link to="/create" className="nav-link">
-              Create Secret
-            </Link>
           </nav>
         </header>
 
@@ -26,11 +24,25 @@ function App() {
             <Route path="/create" element={<CreateSecret />} />
             <Route path="/view" element={<ViewSecret />} />
             <Route path="/edit" element={<EditSecret />} />
+            <Route path="/about" element={<About />} />
           </Routes>
         </main>
 
         <footer>
-          <p>Your secrets are encrypted in your browser. We never see the plaintext.</p>
+          <div className="footer-content">
+            <div className="footer-links">
+              <Link to="/about">About</Link>
+              <span className="footer-separator">|</span>
+              <a
+                href="https://github.com/richmiles/in-the-event-of-my-death"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Open Source
+              </a>
+            </div>
+            <p>Built with end-to-end encryption. Your data stays yours.</p>
+          </div>
         </footer>
       </div>
     </BrowserRouter>

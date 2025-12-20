@@ -7,11 +7,14 @@ import type { ShareableLinks } from '../types'
 
 type Step = 'input' | 'processing' | 'done'
 
+type DatePreset = '1w' | '1m' | '1y' | 'custom'
+
 export default function Home() {
   const [step, setStep] = useState<Step>('input')
   const [message, setMessage] = useState('')
-  const [unlockDate, setUnlockDate] = useState('')
-  const [unlockTime, setUnlockTime] = useState('00:00')
+  const [datePreset, setDatePreset] = useState<DatePreset>('1m')
+  const [customDate, setCustomDate] = useState('')
+  const [customTime, setCustomTime] = useState('00:00')
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string>('')
   const [links, setLinks] = useState<ShareableLinks | null>(null)
@@ -22,18 +25,48 @@ export default function Home() {
   const minDate = new Date(now.getTime() + 5 * 60 * 1000)
   const minDateStr = minDate.toISOString().split('T')[0]
 
+  // Calculate unlock date from preset (using copies to avoid mutation)
+  const getUnlockDate = (): Date | null => {
+    const now = new Date()
+    switch (datePreset) {
+      case '1w':
+        return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+      case '1m': {
+        const d = new Date(now.getTime())
+        d.setMonth(d.getMonth() + 1)
+        return d
+      }
+      case '1y': {
+        const d = new Date(now.getTime())
+        d.setFullYear(d.getFullYear() + 1)
+        return d
+      }
+      case 'custom':
+        return customDate ? new Date(`${customDate}T${customTime}:00`) : null
+    }
+  }
+
+  // Check if form is valid
+  const isValid = message.trim() && (datePreset !== 'custom' || (customDate && customTime))
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
+
+    const unlockAt = getUnlockDate()
+    if (!unlockAt) {
+      setError('Please select an unlock date')
+      return
+    }
+
+    if (unlockAt <= new Date()) {
+      setError('Unlock date must be in the future')
+      return
+    }
+
     setStep('processing')
 
     try {
-      // Combine date and time
-      const unlockAt = new Date(`${unlockDate}T${unlockTime}:00`)
-
-      if (unlockAt <= new Date()) {
-        throw new Error('Unlock date must be in the future')
-      }
 
       // Step 1: Generate cryptographic materials
       setProgress('Encrypting your secret...')
@@ -86,8 +119,9 @@ export default function Home() {
   const resetForm = () => {
     setStep('input')
     setMessage('')
-    setUnlockDate('')
-    setUnlockTime('00:00')
+    setDatePreset('1m')
+    setCustomDate('')
+    setCustomTime('00:00')
     setLinks(null)
     setError(null)
   }
@@ -162,14 +196,30 @@ export default function Home() {
     )
   }
 
+  // Format unlock date for display
+  const formatUnlockDate = (date: Date | null) => {
+    if (!date) return null
+    return {
+      date: date.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      time: date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+    }
+  }
+
+  const unlockDateDisplay = formatUnlockDate(getUnlockDate())
+
   return (
     <div className="home">
       <div className="hero-form">
-        <h1>Time-Locked Secrets</h1>
         <p className="tagline">Create encrypted secrets that unlock on a specific date.</p>
+        <p className="security-note">Encrypted in your browser. We never see your plaintext.</p>
 
         <form onSubmit={handleSubmit} className="inline-form">
-          <div className="form-group">
+          <div className="message-input-container">
             <textarea
               id="message"
               value={message}
@@ -181,66 +231,78 @@ export default function Home() {
             />
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="unlock-date">Unlock Date</label>
-              <input
-                type="date"
-                id="unlock-date"
-                value={unlockDate}
-                onChange={(e) => setUnlockDate(e.target.value)}
-                min={minDateStr}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="unlock-time">Time</label>
-              <input
-                type="time"
-                id="unlock-time"
-                value={unlockTime}
-                onChange={(e) => setUnlockTime(e.target.value)}
-                required
-              />
-            </div>
+          <div className="date-presets">
+            <span className="presets-label">Unlock in:</span>
+            <button
+              type="button"
+              className={datePreset === '1w' ? 'active' : ''}
+              onClick={() => setDatePreset('1w')}
+            >
+              1 Week
+            </button>
+            <button
+              type="button"
+              className={datePreset === '1m' ? 'active' : ''}
+              onClick={() => setDatePreset('1m')}
+            >
+              1 Month
+            </button>
+            <button
+              type="button"
+              className={datePreset === '1y' ? 'active' : ''}
+              onClick={() => setDatePreset('1y')}
+            >
+              1 Year
+            </button>
+            <button
+              type="button"
+              className={datePreset === 'custom' ? 'active' : ''}
+              onClick={() => setDatePreset('custom')}
+            >
+              Custom
+            </button>
           </div>
+
+          {unlockDateDisplay && (
+            <p className="unlock-preview">
+              Unlocks: {unlockDateDisplay.date} at {unlockDateDisplay.time}
+            </p>
+          )}
+
+          {datePreset === 'custom' && (
+            <div className="custom-date-row">
+              <div className="form-group">
+                <label htmlFor="custom-date">Date</label>
+                <input
+                  type="date"
+                  id="custom-date"
+                  value={customDate}
+                  onChange={(e) => setCustomDate(e.target.value)}
+                  min={minDateStr}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="custom-time">Time</label>
+                <input
+                  type="time"
+                  id="custom-time"
+                  value={customTime}
+                  onChange={(e) => setCustomTime(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+
+          {datePreset === 'custom' && !customDate && (
+            <p className="field-hint">Select a date to continue</p>
+          )}
+
+          <button type="submit" className="button primary full-width send-button" disabled={!isValid}>
+            Send
+          </button>
 
           {error && <div className="error-message">{error}</div>}
-
-          <button
-            type="submit"
-            className="button primary full-width"
-            disabled={!message || !unlockDate}
-          >
-            Create Secret
-          </button>
         </form>
-
-        <p className="security-note">Encrypted in your browser. We never see your plaintext.</p>
-      </div>
-
-      <div className="features-section">
-        <div className="features">
-          <div className="feature">
-            <h3>Zero Knowledge</h3>
-            <p>End-to-end encrypted. We never see your content or keys.</p>
-          </div>
-
-          <div className="feature">
-            <h3>Time-Locked</h3>
-            <p>Recipients can only access after the unlock date.</p>
-          </div>
-
-          <div className="feature">
-            <h3>One-Time Access</h3>
-            <p>Retrieved once, then permanently deleted.</p>
-          </div>
-
-          <div className="feature">
-            <h3>No Accounts</h3>
-            <p>No sign-up. Just create and share.</p>
-          </div>
-        </div>
       </div>
     </div>
   )
