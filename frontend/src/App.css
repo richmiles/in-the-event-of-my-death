@@ -172,72 +172,110 @@ textarea {
   text-align: center;
 }
 
-.home h1 {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
+/* Hero form section - the main action area */
+.hero-form {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  margin-bottom: 3rem;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.hero-form h1 {
+  font-size: 1.75rem;
+  margin: 0 0 0.5rem;
   color: #1a1a2e;
 }
 
-.tagline {
-  font-size: 1.25rem;
+.hero-form .tagline {
+  font-size: 1rem;
   color: #6b7280;
-  margin-bottom: 3rem;
+  margin: 0 0 1.5rem;
+}
+
+.hero-form .inline-form {
+  text-align: left;
+}
+
+.hero-form .form-group {
+  margin-bottom: 1rem;
+}
+
+.hero-form textarea {
+  min-height: 100px;
+  font-size: 1rem;
+}
+
+.hero-form .form-row {
+  display: flex;
+  gap: 1rem;
+}
+
+.hero-form .form-row .form-group {
+  flex: 1;
+}
+
+.hero-form label {
+  font-size: 0.875rem;
+  color: #4b5563;
+}
+
+.button.full-width {
+  width: 100%;
+}
+
+.security-note {
+  font-size: 0.8125rem;
+  color: #9ca3af;
+  margin: 1rem 0 0;
+}
+
+.hero-form.success-state {
+  max-width: 600px;
+}
+
+.button.secondary {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.button.secondary:hover {
+  background: #d1d5db;
+}
+
+/* Features section - below the fold */
+.features-section {
+  margin-top: 2rem;
 }
 
 .features {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 3rem;
+  gap: 1rem;
   text-align: left;
 }
 
 .feature {
   background: #fff;
-  padding: 1.5rem;
+  padding: 1.25rem;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: box-shadow 0.2s, transform 0.2s;
-}
-
-.feature:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .feature h3 {
-  margin: 0 0 0.5rem;
+  margin: 0 0 0.25rem;
   color: #1a1a2e;
+  font-size: 0.9375rem;
 }
 
 .feature p {
   margin: 0;
   color: #6b7280;
-  font-size: 0.9375rem;
-}
-
-.cta {
-  margin-bottom: 3rem;
-}
-
-.how-it-works {
-  text-align: left;
-  background: #fff;
-  padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.how-it-works h2 {
-  margin-top: 0;
-}
-
-.how-it-works ol {
-  padding-left: 1.5rem;
-}
-
-.how-it-works li {
-  margin-bottom: 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
 }
 
 /* Create secret page */
@@ -423,8 +461,17 @@ textarea {
     padding: 1rem;
   }
 
-  .home h1 {
-    font-size: 2rem;
+  .hero-form {
+    padding: 1.5rem;
+  }
+
+  .hero-form h1 {
+    font-size: 1.5rem;
+  }
+
+  .hero-form .form-row {
+    flex-direction: column;
+    gap: 0;
   }
 
   .features {
