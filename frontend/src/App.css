@@ -1,28 +1,57 @@
-/* Midnight Archive — Color Palette */
+/* Midnight Archive — Color Palette (Grayscale) */
+
+/* Light theme (default) */
 :root {
   /* Backgrounds */
-  --bg-primary: #0F172A;
-  --bg-secondary: #111827;
-  --bg-muted: #020617;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --bg-muted: #fafafa;
 
   /* Text */
-  --text-primary: #E5E7EB;
-  --text-secondary: #9CA3AF;
-  --text-subtle: #6B7280;
+  --text-primary: #171717;
+  --text-secondary: #525252;
+  --text-subtle: #737373;
 
   /* Accent */
-  --accent-primary: #64748B;
-  --accent-hover: #94A3B8;
+  --accent-primary: #525252;
+  --accent-hover: #404040;
 
   /* Borders & dividers */
-  --border-subtle: #1E293B;
-  --border-strong: #334155;
+  --border-subtle: #e5e5e5;
+  --border-strong: #d4d4d4;
 
   /* States */
-  --success: #4ADE80;
-  --danger: #F87171;
+  --success: #16a34a;
+  --danger: #dc2626;
 
   --content-narrow: 540px;
+}
+
+/* Dark theme (OS preference) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Backgrounds */
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #141414;
+    --bg-muted: #050505;
+
+    /* Text */
+    --text-primary: #e5e5e5;
+    --text-secondary: #a3a3a3;
+    --text-subtle: #737373;
+
+    /* Accent */
+    --accent-primary: #737373;
+    --accent-hover: #a3a3a3;
+
+    /* Borders & dividers */
+    --border-subtle: #1f1f1f;
+    --border-strong: #3d3d3d;
+
+    /* States */
+    --success: #4ADE80;
+    --danger: #F87171;
+  }
 }
 
 /* Reset and base styles */
