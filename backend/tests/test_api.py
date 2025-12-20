@@ -239,6 +239,60 @@ class TestSecrets:
 
         assert response.status_code == 404
 
+    def test_edit_page_can_get_status_with_edit_token(self, client):
+        """
+        The edit page needs to check secret status using the edit token.
+        Currently this fails because /secrets/status only accepts decrypt tokens.
+        """
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret
+        unlock_at = utcnow() + timedelta(hours=24)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+        assert create_response.status_code == 201
+
+        # The edit page uses the edit token to get status
+        # This should work but currently fails
+        status_response = client.get(
+            "/api/v1/secrets/edit/status",
+            headers={"Authorization": f"Bearer {test_data['edit_token']}"},
+        )
+
+        assert status_response.status_code == 200
+        data = status_response.json()
+        assert data["exists"] is True
+        assert data["status"] == "pending"
+        assert "unlock_at" in data
+
     def test_pow_challenge_reuse_rejected(self, client):
         """Test that PoW challenges cannot be reused."""
         test_data = generate_test_data()
