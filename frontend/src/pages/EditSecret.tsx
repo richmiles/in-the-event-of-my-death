@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { extractFromFragment } from '../utils/urlFragments'
 import { getEditSecretStatus, extendUnlockDate } from '../services/api'
 
+type DatePreset = '+1w' | '+1m' | '+1y' | 'custom'
+
 type State =
   | { type: 'loading' }
   | { type: 'missing_params' }
@@ -23,8 +25,43 @@ export default function EditSecret() {
   const [state, setState] = useState<State>(() =>
     params.token ? { type: 'loading' } : { type: 'missing_params' },
   )
-  const [newDate, setNewDate] = useState('')
-  const [newTime, setNewTime] = useState('00:00')
+  const [datePreset, setDatePreset] = useState<DatePreset>('+1m')
+  const [customDate, setCustomDate] = useState('')
+  const [customTime, setCustomTime] = useState('00:00')
+
+  // Calculate new unlock date based on preset (relative to current unlock date)
+  const getNewUnlockDate = (currentUnlockAt: Date): Date | null => {
+    switch (datePreset) {
+      case '+1w':
+        return new Date(currentUnlockAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+      case '+1m': {
+        const d = new Date(currentUnlockAt.getTime())
+        d.setMonth(d.getMonth() + 1)
+        return d
+      }
+      case '+1y': {
+        const d = new Date(currentUnlockAt.getTime())
+        d.setFullYear(d.getFullYear() + 1)
+        return d
+      }
+      case 'custom':
+        return customDate ? new Date(`${customDate}T${customTime}:00`) : null
+    }
+  }
+
+  // Format unlock date for display
+  const formatUnlockDate = (date: Date | null) => {
+    if (!date) return null
+    return {
+      date: date.toLocaleDateString(undefined, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+      time: date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
+    }
+  }
 
   const loadStatus = useCallback(async (editToken: string) => {
     try {
@@ -50,10 +87,6 @@ export default function EditSecret() {
         }
 
         setState({ type: 'loaded', currentUnlockAt: unlockAt })
-
-        // Set default new date to current unlock date
-        setNewDate(unlockAt.toISOString().split('T')[0])
-        setNewTime(unlockAt.toTimeString().slice(0, 5))
       }
     } catch {
       setState({ type: 'error', message: 'Failed to load secret status' })
@@ -71,7 +104,15 @@ export default function EditSecret() {
 
     if (!params.token || state.type !== 'loaded') return
 
-    const newUnlockAt = new Date(`${newDate}T${newTime}:00`)
+    const newUnlockAt = getNewUnlockDate(state.currentUnlockAt)
+
+    if (!newUnlockAt) {
+      setState({
+        type: 'error',
+        message: 'Please select an unlock date',
+      })
+      return
+    }
 
     if (newUnlockAt <= state.currentUnlockAt) {
       setState({
@@ -176,47 +217,92 @@ export default function EditSecret() {
   }
 
   // state.type === 'loaded'
+  const newUnlockDate = getNewUnlockDate(state.currentUnlockAt)
+  const newUnlockDisplay = formatUnlockDate(newUnlockDate)
+  const currentUnlockDisplay = formatUnlockDate(state.currentUnlockAt)
+  const isValid = datePreset !== 'custom' || (customDate && customTime)
+
   return (
     <div className="edit-secret">
       <h1>Extend Unlock Date</h1>
 
       <div className="current-info">
         <p>
-          Current unlock date:{' '}
+          Currently unlocks:{' '}
           <strong>
-            {state.currentUnlockAt.toLocaleDateString()} at{' '}
-            {state.currentUnlockAt.toLocaleTimeString()}
+            {currentUnlockDisplay?.date} at {currentUnlockDisplay?.time}
           </strong>
         </p>
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label htmlFor="new-date">New Unlock Date</label>
-          <p className="help-text">
-            Extend the time before your secret becomes available. You can only move the date
-            forward, not backward.
-          </p>
-          <div className="date-time-inputs">
-            <input
-              type="date"
-              id="new-date"
-              value={newDate}
-              onChange={(e) => setNewDate(e.target.value)}
-              min={state.currentUnlockAt.toISOString().split('T')[0]}
-              required
-            />
-            <input
-              type="time"
-              id="new-time"
-              value={newTime}
-              onChange={(e) => setNewTime(e.target.value)}
-              required
-            />
-          </div>
+        <div className="date-presets">
+          <span className="presets-label">Extend by:</span>
+          <button
+            type="button"
+            className={datePreset === '+1w' ? 'active' : ''}
+            onClick={() => setDatePreset('+1w')}
+          >
+            +1 Week
+          </button>
+          <button
+            type="button"
+            className={datePreset === '+1m' ? 'active' : ''}
+            onClick={() => setDatePreset('+1m')}
+          >
+            +1 Month
+          </button>
+          <button
+            type="button"
+            className={datePreset === '+1y' ? 'active' : ''}
+            onClick={() => setDatePreset('+1y')}
+          >
+            +1 Year
+          </button>
+          <button
+            type="button"
+            className={datePreset === 'custom' ? 'active' : ''}
+            onClick={() => setDatePreset('custom')}
+          >
+            Custom
+          </button>
         </div>
 
-        <button type="submit" className="button primary">
+        {newUnlockDisplay && (
+          <p className="unlock-preview">
+            New unlock: {newUnlockDisplay.date} at {newUnlockDisplay.time}
+          </p>
+        )}
+
+        {datePreset === 'custom' && (
+          <div className="custom-date-row">
+            <div className="form-group">
+              <label htmlFor="custom-date">Date</label>
+              <input
+                type="date"
+                id="custom-date"
+                value={customDate}
+                onChange={(e) => setCustomDate(e.target.value)}
+                min={state.currentUnlockAt.toISOString().split('T')[0]}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="custom-time">Time</label>
+              <input
+                type="time"
+                id="custom-time"
+                value={customTime}
+                onChange={(e) => setCustomTime(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        {datePreset === 'custom' && !customDate && (
+          <p className="field-hint">Select a date to continue</p>
+        )}
+
+        <button type="submit" className="button primary full-width" disabled={!isValid}>
           Update Unlock Date
         </button>
       </form>
