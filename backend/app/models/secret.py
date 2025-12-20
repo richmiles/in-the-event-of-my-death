@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, LargeBinary, String, func
+from sqlalchemy import Boolean, DateTime, Integer, LargeBinary, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -10,9 +10,7 @@ from app.database import Base
 class Secret(Base):
     __tablename__ = "secrets"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     edit_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     decrypt_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
 

@@ -1,57 +1,57 @@
-import { useState } from 'react';
-import { generateSecret, base64ToBytes } from '../services/crypto';
-import { requestChallenge, createSecret } from '../services/api';
-import { solveChallenge } from '../services/pow';
-import { generateShareableLinks } from '../utils/urlFragments';
-import type { ShareableLinks } from '../types';
+import { useState } from 'react'
+import { generateSecret, base64ToBytes } from '../services/crypto'
+import { requestChallenge, createSecret } from '../services/api'
+import { solveChallenge } from '../services/pow'
+import { generateShareableLinks } from '../utils/urlFragments'
+import type { ShareableLinks } from '../types'
 
-type Step = 'input' | 'processing' | 'done';
+type Step = 'input' | 'processing' | 'done'
 
 export default function CreateSecret() {
-  const [step, setStep] = useState<Step>('input');
-  const [message, setMessage] = useState('');
-  const [unlockDate, setUnlockDate] = useState('');
-  const [unlockTime, setUnlockTime] = useState('00:00');
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState<string>('');
-  const [links, setLinks] = useState<ShareableLinks | null>(null);
-  const [copied, setCopied] = useState<'edit' | 'view' | null>(null);
+  const [step, setStep] = useState<Step>('input')
+  const [message, setMessage] = useState('')
+  const [unlockDate, setUnlockDate] = useState('')
+  const [unlockTime, setUnlockTime] = useState('00:00')
+  const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<string>('')
+  const [links, setLinks] = useState<ShareableLinks | null>(null)
+  const [copied, setCopied] = useState<'edit' | 'view' | null>(null)
 
   // Calculate minimum date (5 minutes from now)
-  const now = new Date();
-  const minDate = new Date(now.getTime() + 5 * 60 * 1000);
-  const minDateStr = minDate.toISOString().split('T')[0];
+  const now = new Date()
+  const minDate = new Date(now.getTime() + 5 * 60 * 1000)
+  const minDateStr = minDate.toISOString().split('T')[0]
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    setStep('processing');
+    e.preventDefault()
+    setError(null)
+    setStep('processing')
 
     try {
       // Combine date and time
-      const unlockAt = new Date(`${unlockDate}T${unlockTime}:00`);
+      const unlockAt = new Date(`${unlockDate}T${unlockTime}:00`)
 
       if (unlockAt <= new Date()) {
-        throw new Error('Unlock date must be in the future');
+        throw new Error('Unlock date must be in the future')
       }
 
       // Step 1: Generate cryptographic materials
-      setProgress('Encrypting your secret...');
-      const secret = await generateSecret(message);
+      setProgress('Encrypting your secret...')
+      const secret = await generateSecret(message)
 
       // Step 2: Request PoW challenge
-      setProgress('Requesting proof-of-work challenge...');
-      const ciphertextSize = base64ToBytes(secret.encrypted.ciphertext).length;
-      const challenge = await requestChallenge(secret.payloadHash, ciphertextSize);
+      setProgress('Requesting proof-of-work challenge...')
+      const ciphertextSize = base64ToBytes(secret.encrypted.ciphertext).length
+      const challenge = await requestChallenge(secret.payloadHash, ciphertextSize)
 
       // Step 3: Solve PoW
-      setProgress(`Solving proof-of-work (difficulty: ${challenge.difficulty})...`);
+      setProgress(`Solving proof-of-work (difficulty: ${challenge.difficulty})...`)
       const powProof = await solveChallenge(challenge, secret.payloadHash, (iterations) => {
-        setProgress(`Solving proof-of-work... (${(iterations / 1000).toFixed(0)}k iterations)`);
-      });
+        setProgress(`Solving proof-of-work... (${(iterations / 1000).toFixed(0)}k iterations)`)
+      })
 
       // Step 4: Create secret on server
-      setProgress('Storing encrypted secret...');
+      setProgress('Storing encrypted secret...')
       await createSecret({
         ciphertext: secret.encrypted.ciphertext,
         iv: secret.encrypted.iv,
@@ -60,28 +60,28 @@ export default function CreateSecret() {
         edit_token: secret.editToken,
         decrypt_token: secret.decryptToken,
         pow_proof: powProof,
-      });
+      })
 
       // Step 5: Generate shareable links
       const shareableLinks = generateShareableLinks(
         secret.editToken,
         secret.decryptToken,
-        secret.encryptionKey
-      );
+        secret.encryptionKey,
+      )
 
-      setLinks(shareableLinks);
-      setStep('done');
+      setLinks(shareableLinks)
+      setStep('done')
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred');
-      setStep('input');
+      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      setStep('input')
     }
-  };
+  }
 
   const copyToClipboard = async (text: string, type: 'edit' | 'view') => {
-    await navigator.clipboard.writeText(text);
-    setCopied(type);
-    setTimeout(() => setCopied(null), 2000);
-  };
+    await navigator.clipboard.writeText(text)
+    setCopied(type)
+    setTimeout(() => setCopied(null), 2000)
+  }
 
   if (step === 'processing') {
     return (
@@ -92,7 +92,7 @@ export default function CreateSecret() {
           <p>{progress}</p>
         </div>
       </div>
-    );
+    )
   }
 
   if (step === 'done' && links) {
@@ -102,8 +102,8 @@ export default function CreateSecret() {
 
         <div className="success-message">
           <p>
-            Your secret has been encrypted and stored. Save these links carefully -
-            you won't see them again!
+            Your secret has been encrypted and stored. Save these links carefully - you won't see
+            them again!
           </p>
         </div>
 
@@ -111,8 +111,8 @@ export default function CreateSecret() {
           <div className="link-box">
             <h3>Edit Link (keep this private)</h3>
             <p className="link-description">
-              Use this link to extend the unlock date. Only share if you want someone
-              else to be able to postpone the release.
+              Use this link to extend the unlock date. Only share if you want someone else to be
+              able to postpone the release.
             </p>
             <div className="link-container">
               <input type="text" value={links.editLink} readOnly />
@@ -128,8 +128,8 @@ export default function CreateSecret() {
           <div className="link-box">
             <h3>View Link (share with recipient)</h3>
             <p className="link-description">
-              Share this link with the person who should receive your secret.
-              They can only access it after the unlock date.
+              Share this link with the person who should receive your secret. They can only access
+              it after the unlock date.
             </p>
             <div className="link-container">
               <input type="text" value={links.viewLink} readOnly />
@@ -144,12 +144,11 @@ export default function CreateSecret() {
         </div>
 
         <div className="warning">
-          <strong>Important:</strong> The encryption key is in the URL fragment
-          (after #). It is never sent to our server. If you lose these links, your
-          secret cannot be recovered.
+          <strong>Important:</strong> The encryption key is in the URL fragment (after #). It is
+          never sent to our server. If you lose these links, your secret cannot be recovered.
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -200,5 +199,5 @@ export default function CreateSecret() {
         </button>
       </form>
     </div>
-  );
+  )
 }

@@ -46,7 +46,7 @@ def find_secret_by_edit_token(db: Session, edit_token: str) -> Secret | None:
     """Find a secret by its edit token (verifies hash)."""
     # We need to iterate through secrets since we can't directly query by token
     # In production, consider adding a token prefix/identifier for faster lookup
-    secrets = db.query(Secret).filter(Secret.is_deleted == False).all()
+    secrets = db.query(Secret).filter(Secret.is_deleted == False).all()  # noqa: E712
 
     for secret in secrets:
         if verify_token(edit_token, secret.edit_token_hash):
@@ -57,7 +57,7 @@ def find_secret_by_edit_token(db: Session, edit_token: str) -> Secret | None:
 
 def find_secret_by_decrypt_token(db: Session, decrypt_token: str) -> Secret | None:
     """Find a secret by its decrypt token (verifies hash)."""
-    secrets = db.query(Secret).filter(Secret.is_deleted == False).all()
+    secrets = db.query(Secret).filter(Secret.is_deleted == False).all()  # noqa: E712
 
     for secret in secrets:
         if verify_token(decrypt_token, secret.decrypt_token_hash):
@@ -159,6 +159,6 @@ def hard_delete_retrieved_secrets(db: Session) -> int:
 
     Returns the count of deleted rows.
     """
-    result = db.query(Secret).filter(Secret.is_deleted == True).delete()
+    result = db.query(Secret).filter(Secret.is_deleted == True).delete()  # noqa: E712
     db.commit()
     return result

@@ -17,7 +17,9 @@ def generate_challenge(db: Session, payload_hash: str, ciphertext_size: int) -> 
     size_factor = min(ciphertext_size // 100_000, 4)
     difficulty = settings.pow_base_difficulty + size_factor
 
-    expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(seconds=settings.pow_challenge_ttl_seconds)
+    expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(
+        seconds=settings.pow_challenge_ttl_seconds
+    )
 
     challenge = Challenge(
         nonce=nonce,
@@ -76,8 +78,10 @@ def verify_pow(db: Session, challenge_id: str, nonce: str, counter: int, payload
 
 def cleanup_expired_challenges(db: Session) -> int:
     """Delete expired challenges. Returns count of deleted rows."""
-    result = db.query(Challenge).filter(
-        Challenge.expires_at < datetime.now(UTC).replace(tzinfo=None)
-    ).delete()
+    result = (
+        db.query(Challenge)
+        .filter(Challenge.expires_at < datetime.now(UTC).replace(tzinfo=None))
+        .delete()
+    )
     db.commit()
     return result

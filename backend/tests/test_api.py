@@ -5,8 +5,6 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 
 def utcnow():
     """Get current UTC time as naive datetime."""
@@ -16,7 +14,6 @@ def utcnow():
 def generate_test_data():
     """Generate test cryptographic data."""
     # Simulating what the frontend would generate
-    encryption_key = secrets.token_bytes(32)
     iv = secrets.token_bytes(12)
     auth_tag = secrets.token_bytes(16)
     ciphertext = secrets.token_bytes(100)  # Fake ciphertext

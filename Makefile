@@ -1,4 +1,4 @@
-.PHONY: install backend frontend dev test migrate help
+.PHONY: install backend frontend dev test migrate lint format format-check typecheck check hooks help
 
 help:
 	@echo "Available commands:"
@@ -7,11 +7,17 @@ help:
 	@echo "  make frontend  - Run the frontend dev server"
 	@echo "  make dev       - Run both backend and frontend"
 	@echo "  make test      - Run backend tests"
+	@echo "  make lint      - Run lint checks"
+	@echo "  make format    - Auto-format code"
+	@echo "  make typecheck - Run TypeScript type checking"
+	@echo "  make check     - Run lint, typecheck, and tests"
+	@echo "  make hooks     - Install git hooks"
 	@echo "  make migrate   - Run database migrations"
 
 install:
 	cd backend && poetry install
 	cd frontend && npm install
+	@make hooks
 
 backend:
 	cd backend && poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -28,6 +34,26 @@ dev:
 
 test:
 	cd backend && poetry run pytest tests/ -v
+
+lint:
+	cd backend && poetry run ruff check .
+	cd frontend && npm run lint
+
+format:
+	cd backend && poetry run ruff format .
+	cd frontend && npm run format:write
+
+format-check:
+	cd backend && poetry run ruff format --check .
+	cd frontend && npm run format
+
+typecheck:
+	cd frontend && npx tsc --noEmit
+
+check: lint typecheck test
+
+hooks:
+	git config core.hooksPath .githooks
 
 migrate:
 	cd backend && poetry run alembic upgrade head

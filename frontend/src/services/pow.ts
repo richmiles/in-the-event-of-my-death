@@ -4,25 +4,25 @@
  * Wraps the Web Worker for easier use.
  */
 
-import type { Challenge, PowProof } from '../types';
+import type { Challenge, PowProof } from '../types'
 
 interface PowProgress {
-  type: 'progress';
-  iterations: number;
+  type: 'progress'
+  iterations: number
 }
 
 interface PowSuccess {
-  type: 'success';
-  counter: number;
-  hash: string;
+  type: 'success'
+  counter: number
+  hash: string
 }
 
 interface PowError {
-  type: 'error';
-  message: string;
+  type: 'error'
+  message: string
 }
 
-type PowResponse = PowProgress | PowSuccess | PowError;
+type PowResponse = PowProgress | PowSuccess | PowError
 
 /**
  * Solve a proof-of-work challenge.
@@ -35,50 +35,49 @@ type PowResponse = PowProgress | PowSuccess | PowError;
 export async function solveChallenge(
   challenge: Challenge,
   payloadHash: string,
-  onProgress?: (iterations: number) => void
+  onProgress?: (iterations: number) => void,
 ): Promise<PowProof> {
   return new Promise((resolve, reject) => {
     // Create the worker
-    const worker = new Worker(
-      new URL('../workers/pow.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    const worker = new Worker(new URL('../workers/pow.worker.ts', import.meta.url), {
+      type: 'module',
+    })
 
     worker.onmessage = (event: MessageEvent<PowResponse>) => {
-      const response = event.data;
+      const response = event.data
 
       switch (response.type) {
         case 'progress':
-          onProgress?.(response.iterations);
-          break;
+          onProgress?.(response.iterations)
+          break
 
         case 'success':
-          worker.terminate();
+          worker.terminate()
           resolve({
             challenge_id: challenge.challenge_id,
             nonce: challenge.nonce,
             counter: response.counter,
             payload_hash: payloadHash,
-          });
-          break;
+          })
+          break
 
         case 'error':
-          worker.terminate();
-          reject(new Error(response.message));
-          break;
+          worker.terminate()
+          reject(new Error(response.message))
+          break
       }
-    };
+    }
 
     worker.onerror = (error) => {
-      worker.terminate();
-      reject(new Error(`Worker error: ${error.message}`));
-    };
+      worker.terminate()
+      reject(new Error(`Worker error: ${error.message}`))
+    }
 
     // Start the worker
     worker.postMessage({
       nonce: challenge.nonce,
       difficulty: challenge.difficulty,
       payloadHash,
-    });
-  });
+    })
+  })
 }

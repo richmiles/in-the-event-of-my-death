@@ -30,6 +30,7 @@ def db_session():
 @pytest.fixture
 def client(db_session):
     """Create a test client with the test database."""
+
     def override_get_db():
         try:
             yield db_session
