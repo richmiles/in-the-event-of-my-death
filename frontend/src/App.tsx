@@ -12,7 +12,7 @@ function App() {
         <header>
           <nav>
             <Link to="/" className="logo">
-              InTheEventOfMyDeath
+              In The Event Of My Death
             </Link>
             <Link to="/create" className="nav-link">
               Create Secret

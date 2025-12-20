@@ -39,19 +39,27 @@ nav {
   text-decoration: none;
   font-size: 1.25rem;
   font-weight: 600;
+  letter-spacing: -0.5px;
+  transition: opacity 0.2s;
+}
+
+.logo:hover {
+  opacity: 0.9;
 }
 
 .nav-link {
-  color: #a8a8b3;
+  color: #fff;
   text-decoration: none;
   padding: 0.5rem 1rem;
-  border-radius: 4px;
-  transition: background 0.2s, color 0.2s;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  transition: background 0.2s, transform 0.1s;
+  font-weight: 500;
 }
 
 .nav-link:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 /* Main content */
@@ -178,7 +186,7 @@ textarea {
 
 .features {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
   margin-bottom: 3rem;
   text-align: left;
@@ -189,6 +197,12 @@ textarea {
   padding: 1.5rem;
   border-radius: 8px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.feature:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
 }
 
 .feature h3 {
