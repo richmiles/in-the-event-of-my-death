@@ -93,9 +93,7 @@ def mark_challenge_used(db: Session, challenge: Challenge) -> None:
     db.commit()
 
 
-def verify_pow(
-    db: Session, challenge_id: str, nonce: str, counter: int, payload_hash: str
-) -> bool:
+def verify_pow(db: Session, challenge_id: str, nonce: str, counter: int, payload_hash: str) -> bool:
     """
     Verify a proof-of-work solution and mark challenge as used.
 
