@@ -6,7 +6,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.models.secret import Secret
 from app.services.secret_service import create_secret, delete_expired_secrets
 
 
