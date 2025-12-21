@@ -49,8 +49,8 @@
     --border-strong: #3d3d3d;
 
     /* States */
-    --success: #4ADE80;
-    --danger: #F87171;
+    --success: #4ade80;
+    --danger: #f87171;
   }
 }
 
@@ -61,8 +61,17 @@
 
 body {
   font-family:
-    'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
-    Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    'Source Sans 3',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Open Sans',
+    'Helvetica Neue',
+    sans-serif;
   line-height: 1.6;
   color: var(--text-primary);
   background: var(--bg-primary);
@@ -582,7 +591,7 @@ textarea::placeholder {
 
 .warning {
   background: rgba(251, 191, 36, 0.15);
-  color: #FBBF24;
+  color: #fbbf24;
   padding: 1rem;
   border-radius: 6px;
   margin: 1.5rem 0;
@@ -592,7 +601,7 @@ textarea::placeholder {
 
 .info {
   background: rgba(96, 165, 250, 0.15);
-  color: #60A5FA;
+  color: #60a5fa;
   padding: 1rem;
   border-radius: 6px;
   margin: 1.5rem 0;
