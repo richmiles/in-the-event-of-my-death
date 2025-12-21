@@ -616,3 +616,187 @@ class TestPowHardening:
             },
         )
         assert second_response.status_code == 201
+
+
+class TestExpiryFeature:
+    """Tests for the expiry feature."""
+
+    def test_create_secret_with_expires_at(self, client):
+        """Test creating a secret with expires_at field."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret with expires_at
+        unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=2)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 201
+        data = create_response.json()
+        assert "secret_id" in data
+        assert "unlock_at" in data
+        assert "expires_at" in data
+        assert "created_at" in data
+
+    def test_create_secret_without_expires_at(self, client):
+        """Test creating a secret without expires_at (should be optional)."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret without expires_at
+        unlock_at = utcnow() + timedelta(hours=1)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 201
+        data = create_response.json()
+        assert "secret_id" in data
+        assert data.get("expires_at") is None
+
+    def test_expires_at_must_be_after_unlock_at(self, client):
+        """Test that expires_at must be after unlock_at."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Try to create secret with expires_at before unlock_at
+        unlock_at = utcnow() + timedelta(hours=2)
+        expires_at = utcnow() + timedelta(hours=1)  # Before unlock_at
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 422
+        assert "after unlock_at" in str(create_response.json()).lower()
+
+    def test_status_includes_expires_at(self, client):
+        """Test that status endpoint includes expires_at."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret with expires_at
+        unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=2)
+        client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        # Check status
+        status_response = client.get(
+            "/api/v1/secrets/status",
+            headers={"Authorization": f"Bearer {test_data['decrypt_token']}"},
+        )
+
+        assert status_response.status_code == 200
+        data = status_response.json()
+        assert "expires_at" in data
+        assert data["expires_at"] is not None

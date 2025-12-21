@@ -15,6 +15,7 @@ def create_secret(
     unlock_at: datetime,
     edit_token: str,
     decrypt_token: str,
+    expires_at: datetime | None = None,
 ) -> Secret:
     """
     Create a new secret with hashed tokens.
@@ -30,6 +31,7 @@ def create_secret(
         iv=iv,
         auth_tag=auth_tag,
         unlock_at=unlock_at,
+        expires_at=expires_at,
         edit_token_hash=hash_token(edit_token),
         decrypt_token_hash=hash_token(decrypt_token),
         ciphertext_size=len(ciphertext),
@@ -137,6 +139,7 @@ def get_secret_status(db: Session, secret: Secret) -> dict:
             "exists": True,
             "status": "retrieved",
             "unlock_at": secret.unlock_at,
+            "expires_at": secret.expires_at,
         }
 
     if now >= secret.unlock_at:
@@ -144,12 +147,14 @@ def get_secret_status(db: Session, secret: Secret) -> dict:
             "exists": True,
             "status": "available",
             "unlock_at": secret.unlock_at,
+            "expires_at": secret.expires_at,
         }
 
     return {
         "exists": True,
         "status": "pending",
         "unlock_at": secret.unlock_at,
+        "expires_at": secret.expires_at,
     }
 
 
@@ -160,5 +165,28 @@ def hard_delete_retrieved_secrets(db: Session) -> int:
     Returns the count of deleted rows.
     """
     result = db.query(Secret).filter(Secret.is_deleted == True).delete()  # noqa: E712
+    db.commit()
+    return result
+
+
+def delete_expired_secrets(db: Session) -> int:
+    """
+    Mark expired secrets as deleted.
+
+    Secrets with expires_at < now and retrieved_at IS NULL are marked as deleted.
+    Returns the count of marked rows.
+    """
+    now = datetime.now(UTC).replace(tzinfo=None)
+
+    result = (
+        db.query(Secret)
+        .filter(
+            Secret.expires_at != None,  # noqa: E711
+            Secret.expires_at < now,
+            Secret.retrieved_at == None,  # noqa: E711
+            Secret.is_deleted == False,  # noqa: E712
+        )
+        .update({"is_deleted": True})
+    )
     db.commit()
     return result

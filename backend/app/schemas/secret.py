@@ -37,6 +37,7 @@ class SecretCreate(BaseModel):
     iv: str = Field(..., description="Base64 encoded 12-byte IV")
     auth_tag: str = Field(..., description="Base64 encoded 16-byte auth tag")
     unlock_at: datetime
+    expires_at: datetime | None = None
     edit_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     decrypt_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     pow_proof: PowProof
@@ -85,10 +86,29 @@ class SecretCreate(BaseModel):
             raise ValueError(f"Unlock date cannot exceed {settings.max_unlock_days} days")
         return v_naive
 
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expires_at(cls, v: datetime | None, info) -> datetime | None:
+        if v is None:
+            return None
+
+        # Make v timezone-naive for comparison
+        v_naive = v.replace(tzinfo=None) if v.tzinfo else v
+
+        # If unlock_at is already validated, check that expires_at is after it
+        if "unlock_at" in info.data:
+            unlock_at = info.data["unlock_at"]
+            unlock_at_naive = unlock_at.replace(tzinfo=None) if unlock_at.tzinfo else unlock_at
+            if v_naive <= unlock_at_naive:
+                raise ValueError("expires_at must be after unlock_at")
+
+        return v_naive
+
 
 class SecretCreateResponse(BaseModel):
     secret_id: str
     unlock_at: datetime
+    expires_at: datetime | None = None
     created_at: datetime
 
 
@@ -116,6 +136,7 @@ class SecretStatusResponse(BaseModel):
     exists: bool
     status: str  # "pending" | "available" | "retrieved"
     unlock_at: datetime | None = None
+    expires_at: datetime | None = None
 
 
 class SecretRetrieveResponse(BaseModel):

@@ -108,6 +108,7 @@ async def create_new_secret(
         unlock_at=secret_data.unlock_at,
         edit_token=secret_data.edit_token,
         decrypt_token=secret_data.decrypt_token,
+        expires_at=secret_data.expires_at,
     )
 
     # Step 5: Only NOW mark challenge as used (after all validations passed)
@@ -116,6 +117,7 @@ async def create_new_secret(
     return SecretCreateResponse(
         secret_id=secret.id,
         unlock_at=secret.unlock_at,
+        expires_at=secret.expires_at,
         created_at=secret.created_at,
     )
 
