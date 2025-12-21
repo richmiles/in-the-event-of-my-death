@@ -67,7 +67,6 @@ export default function Home() {
     setStep('processing')
 
     try {
-
       // Step 1: Generate cryptographic materials
       setProgress('Encrypting your secret...')
       const secret = await generateSecret(message)
@@ -295,7 +294,11 @@ export default function Home() {
             <p className="field-hint">Select a date to continue</p>
           )}
 
-          <button type="submit" className="button primary full-width send-button" disabled={!isValid}>
+          <button
+            type="submit"
+            className="button primary full-width send-button"
+            disabled={!isValid}
+          >
             Send
           </button>
 
