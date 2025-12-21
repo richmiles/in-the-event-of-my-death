@@ -1,4 +1,5 @@
 import base64
+import re
 from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel, Field, field_validator
@@ -6,11 +7,29 @@ from pydantic import BaseModel, Field, field_validator
 from app.config import settings
 
 
+def strict_base64_decode(value: str, field_name: str) -> bytes:
+    """
+    Strictly validate and decode base64 string.
+
+    Rejects strings with invalid characters, incorrect padding, or whitespace.
+    """
+    # Check for valid base64 characters only (no whitespace allowed)
+    if not re.match(r"^[A-Za-z0-9+/]*={0,2}$", value):
+        raise ValueError(f"{field_name}: Invalid base64 characters")
+    # Check length is multiple of 4
+    if len(value) % 4 != 0:
+        raise ValueError(f"{field_name}: Invalid base64 length (must be multiple of 4)")
+    try:
+        return base64.b64decode(value, validate=True)
+    except Exception:
+        raise ValueError(f"{field_name}: Invalid base64 encoding")
+
+
 class PowProof(BaseModel):
     challenge_id: str
-    nonce: str
+    nonce: str = Field(..., min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
     counter: int = Field(..., ge=0)
-    payload_hash: str = Field(..., min_length=64, max_length=64)
+    payload_hash: str = Field(..., min_length=64, max_length=64, pattern=r"^[a-f0-9]{64}$")
 
 
 class SecretCreate(BaseModel):
@@ -24,11 +43,8 @@ class SecretCreate(BaseModel):
 
     @field_validator("ciphertext")
     @classmethod
-    def validate_ciphertext_size(cls, v: str) -> str:
-        try:
-            decoded = base64.b64decode(v)
-        except Exception:
-            raise ValueError("Invalid base64 encoding")
+    def validate_ciphertext_base64(cls, v: str) -> str:
+        decoded = strict_base64_decode(v, "ciphertext")
         if len(decoded) > settings.max_ciphertext_size:
             raise ValueError(f"Ciphertext exceeds {settings.max_ciphertext_size} bytes")
         if len(decoded) < 1:
@@ -38,10 +54,7 @@ class SecretCreate(BaseModel):
     @field_validator("iv")
     @classmethod
     def validate_iv(cls, v: str) -> str:
-        try:
-            decoded = base64.b64decode(v)
-        except Exception:
-            raise ValueError("Invalid base64 encoding")
+        decoded = strict_base64_decode(v, "iv")
         if len(decoded) != 12:
             raise ValueError("IV must be exactly 12 bytes")
         return v
@@ -49,10 +62,7 @@ class SecretCreate(BaseModel):
     @field_validator("auth_tag")
     @classmethod
     def validate_auth_tag(cls, v: str) -> str:
-        try:
-            decoded = base64.b64decode(v)
-        except Exception:
-            raise ValueError("Invalid base64 encoding")
+        decoded = strict_base64_decode(v, "auth_tag")
         if len(decoded) != 16:
             raise ValueError("Auth tag must be exactly 16 bytes")
         return v

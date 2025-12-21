@@ -8,14 +8,22 @@ from app.config import settings
 from app.models.challenge import Challenge
 
 
+def compute_expected_difficulty(ciphertext_size: int) -> int:
+    """
+    Compute the expected PoW difficulty for a given payload size.
+
+    This is used both for challenge generation and for validation at secret creation.
+    """
+    size_factor = min(ciphertext_size // 100_000, 4)
+    return settings.pow_base_difficulty + size_factor
+
+
 def generate_challenge(db: Session, payload_hash: str, ciphertext_size: int) -> Challenge:
     """Generate a new proof-of-work challenge."""
     nonce = secrets.token_hex(32)  # 64 hex characters
 
     # Dynamic difficulty based on ciphertext size
-    # Base difficulty + 1 per 100KB, max +4
-    size_factor = min(ciphertext_size // 100_000, 4)
-    difficulty = settings.pow_base_difficulty + size_factor
+    difficulty = compute_expected_difficulty(ciphertext_size)
 
     expires_at = datetime.now(UTC).replace(tzinfo=None) + timedelta(
         seconds=settings.pow_challenge_ttl_seconds
@@ -35,11 +43,14 @@ def generate_challenge(db: Session, payload_hash: str, ciphertext_size: int) -> 
     return challenge
 
 
-def verify_pow(db: Session, challenge_id: str, nonce: str, counter: int, payload_hash: str) -> bool:
+def validate_pow(
+    db: Session, challenge_id: str, nonce: str, counter: int, payload_hash: str
+) -> Challenge:
     """
-    Verify a proof-of-work solution.
+    Validate a proof-of-work solution WITHOUT marking the challenge as used.
 
-    Returns True if valid, raises ValueError with specific message if invalid.
+    Returns the Challenge if valid, raises ValueError with specific message if invalid.
+    Use mark_challenge_used() after all other validations pass.
     """
     challenge = db.query(Challenge).filter(Challenge.id == challenge_id).first()
 
@@ -69,10 +80,32 @@ def verify_pow(db: Session, challenge_id: str, nonce: str, counter: int, payload
     if hash_int >= target:
         raise ValueError("Insufficient proof of work")
 
-    # Mark challenge as used
+    return challenge
+
+
+def mark_challenge_used(db: Session, challenge: Challenge) -> None:
+    """
+    Mark a challenge as used after all validations pass.
+
+    Call this only after the secret has been successfully created.
+    """
     challenge.is_used = True
     db.commit()
 
+
+def verify_pow(
+    db: Session, challenge_id: str, nonce: str, counter: int, payload_hash: str
+) -> bool:
+    """
+    Verify a proof-of-work solution and mark challenge as used.
+
+    DEPRECATED: Use validate_pow() + mark_challenge_used() for better error handling.
+    Kept for backwards compatibility.
+
+    Returns True if valid, raises ValueError with specific message if invalid.
+    """
+    challenge = validate_pow(db, challenge_id, nonce, counter, payload_hash)
+    mark_challenge_used(db, challenge)
     return True
 
 

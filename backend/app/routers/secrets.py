@@ -1,3 +1,6 @@
+import base64
+import hashlib
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -12,7 +15,11 @@ from app.schemas.secret import (
     SecretRetrieveResponse,
     SecretStatusResponse,
 )
-from app.services.pow_service import verify_pow
+from app.services.pow_service import (
+    compute_expected_difficulty,
+    mark_challenge_used,
+    validate_pow,
+)
 from app.services.secret_service import (
     create_secret,
     extend_unlock_date,
@@ -32,6 +39,18 @@ def extract_bearer_token(authorization: str = Header(...)) -> str:
     return authorization[7:]
 
 
+def compute_payload_hash(ciphertext_b64: str, iv_b64: str, auth_tag_b64: str) -> str:
+    """
+    Compute SHA-256 hash of the payload for PoW binding verification.
+
+    Hash is computed over: ciphertext || iv || auth_tag (raw bytes)
+    """
+    ciphertext = base64.b64decode(ciphertext_b64)
+    iv = base64.b64decode(iv_b64)
+    auth_tag = base64.b64decode(auth_tag_b64)
+    return hashlib.sha256(ciphertext + iv + auth_tag).hexdigest()
+
+
 @router.post("/secrets", response_model=SecretCreateResponse, status_code=201)
 @limiter.limit(settings.rate_limit_creates)
 async def create_new_secret(
@@ -42,11 +61,11 @@ async def create_new_secret(
     """
     Create a new time-locked secret.
 
-    Requires a valid proof-of-work solution.
+    Requires a valid proof-of-work solution bound to the exact payload.
     """
-    # Verify proof of work
+    # Step 1: Validate PoW (does NOT mark challenge as used yet)
     try:
-        verify_pow(
+        challenge = validate_pow(
             db=db,
             challenge_id=secret_data.pow_proof.challenge_id,
             nonce=secret_data.pow_proof.nonce,
@@ -56,7 +75,31 @@ async def create_new_secret(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Create the secret
+    # Step 2: Verify payload hash matches actual ciphertext
+    # This prevents solving PoW for one payload and submitting another
+    computed_hash = compute_payload_hash(
+        secret_data.ciphertext,
+        secret_data.iv,
+        secret_data.auth_tag,
+    )
+    if computed_hash != secret_data.pow_proof.payload_hash:
+        raise HTTPException(
+            status_code=400,
+            detail="Payload hash mismatch - ciphertext doesn't match PoW proof",
+        )
+
+    # Step 3: Verify difficulty is sufficient for actual payload size
+    # Allows "overpay" (solving harder challenge than needed) but rejects "underpay"
+    actual_ciphertext_size = len(base64.b64decode(secret_data.ciphertext))
+    expected_difficulty = compute_expected_difficulty(actual_ciphertext_size)
+    if challenge.difficulty < expected_difficulty:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient PoW difficulty for payload size: "
+            f"got {challenge.difficulty}, need {expected_difficulty}",
+        )
+
+    # Step 4: Create the secret (may still fail on other validations)
     secret = create_secret(
         db=db,
         ciphertext_b64=secret_data.ciphertext,
@@ -66,6 +109,9 @@ async def create_new_secret(
         edit_token=secret_data.edit_token,
         decrypt_token=secret_data.decrypt_token,
     )
+
+    # Step 5: Only NOW mark challenge as used (after all validations passed)
+    mark_challenge_used(db, challenge)
 
     return SecretCreateResponse(
         secret_id=secret.id,
