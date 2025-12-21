@@ -8,7 +8,7 @@ import type { ShareableLinks } from '../types'
 type Step = 'input' | 'processing' | 'done'
 
 type DatePreset = '1w' | '1m' | '1y' | 'custom'
-type ExpiryPreset = '1w' | '1m' | '1y' | 'never' | 'custom'
+type ExpiryPreset = '1w' | '1m' | '1y' | 'custom'
 
 export default function Home() {
   const [step, setStep] = useState<Step>('input')
@@ -68,13 +68,6 @@ export default function Home() {
       case '1y': {
         const d = new Date(unlockDate.getTime())
         d.setFullYear(d.getFullYear() + 1)
-        return d
-      }
-      case 'never': {
-        // Max 5 years from now (backend constraint)
-        const now = new Date()
-        const d = new Date(now.getTime())
-        d.setFullYear(d.getFullYear() + 5)
         return d
       }
       case 'custom':
@@ -420,7 +413,7 @@ export default function Home() {
           {showExpiryOptions && (
             <div className="expiry-section">
               <div className="date-presets">
-                <span className="presets-label">Expires:</span>
+                <span className="presets-label">Expire in:</span>
                 <button
                   type="button"
                   className={expiryPreset === '1w' ? 'active' : ''}
@@ -444,13 +437,6 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
-                  className={expiryPreset === 'never' ? 'active' : ''}
-                  onClick={() => setExpiryPreset('never')}
-                >
-                  Never
-                </button>
-                <button
-                  type="button"
                   className={expiryPreset === 'custom' ? 'active' : ''}
                   onClick={() => setExpiryPreset('custom')}
                 >
@@ -460,8 +446,7 @@ export default function Home() {
 
               {getUnlockDate() && getExpiryDate(getUnlockDate()!) && (
                 <p className="unlock-preview">
-                  Expires: {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date} at{' '}
-                  {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.time}
+                  Expires: {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date}
                 </p>
               )}
 

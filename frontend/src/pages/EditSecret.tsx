@@ -3,7 +3,7 @@ import { extractFromFragment } from '../utils/urlFragments'
 import { getEditSecretStatus, updateSecretDates } from '../services/api'
 
 type DatePreset = '+1w' | '+1m' | '+1y' | 'custom'
-type ExpiryPreset = '+1w' | '+1m' | '+1y' | 'never' | 'custom'
+type ExpiryPreset = '+1w' | '+1m' | '+1y' | 'custom'
 
 type State =
   | { type: 'loading' }
@@ -69,13 +69,6 @@ export default function EditSecret() {
       case '+1y': {
         const d = new Date(currentExpiresAt.getTime())
         d.setFullYear(d.getFullYear() + 1)
-        return d
-      }
-      case 'never': {
-        // Max 5 years from now (backend constraint)
-        const now = new Date()
-        const d = new Date(now.getTime())
-        d.setFullYear(d.getFullYear() + 5)
         return d
       }
       case 'custom':
@@ -427,13 +420,6 @@ export default function EditSecret() {
           </button>
           <button
             type="button"
-            className={expiryPreset === 'never' ? 'active' : ''}
-            onClick={() => setExpiryPreset('never')}
-          >
-            Never
-          </button>
-          <button
-            type="button"
             className={expiryPreset === 'custom' ? 'active' : ''}
             onClick={() => setExpiryPreset('custom')}
           >
@@ -441,11 +427,7 @@ export default function EditSecret() {
           </button>
         </div>
 
-        {newExpiryDisplay && (
-          <p className="unlock-preview">
-            New expiry: {newExpiryDisplay.date} at {newExpiryDisplay.time}
-          </p>
-        )}
+        {newExpiryDisplay && <p className="unlock-preview">New expiry: {newExpiryDisplay.date}</p>}
 
         {expiryPreset === 'custom' && (
           <div className="custom-date-row">
