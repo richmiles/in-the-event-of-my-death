@@ -50,7 +50,7 @@ format-check:
 typecheck:
 	cd frontend && npx tsc --noEmit
 
-check: lint typecheck test
+check: lint format-check typecheck test
 
 hooks:
 	git config core.hooksPath .githooks
