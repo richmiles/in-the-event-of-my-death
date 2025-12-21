@@ -8,9 +8,12 @@ export default function About() {
         <h2>How It Works</h2>
         <ol>
           <li>Write your secret message</li>
-          <li>Choose when it should unlock</li>
+          <li>
+            Choose an unlock date (when it becomes accessible) and expiry date (when it&apos;s
+            deleted)
+          </li>
           <li>Share the view link with your recipient</li>
-          <li>Keep the edit link to extend the date if needed</li>
+          <li>Keep the edit link to adjust dates if needed</li>
         </ol>
       </section>
 
@@ -52,11 +55,20 @@ export default function About() {
           </p>
         </div>
         <div className="faq-item">
+          <h3>What&apos;s the difference between unlock date and expiry date?</h3>
+          <p>
+            The <strong>unlock date</strong> is when your recipient can first access the secret. The{' '}
+            <strong>expiry date</strong> is when the secret is permanently deleted, whether
+            retrieved or not. You can set unlock dates up to 2 years and expiry dates up to 5 years
+            in the future. Use the edit link to adjust either date before the secret is retrieved.
+          </p>
+        </div>
+        <div className="faq-item">
           <h3>What if I don&apos;t retrieve my secret before it expires?</h3>
           <p>
-            Secrets expire after 90 days from creation. If a secret is not retrieved before
-            expiration, it is permanently deleted from our servers and cannot be recovered. Use the
-            edit link to extend the unlock date if needed.
+            If a secret is not retrieved before its expiry date, it is permanently deleted from our
+            servers and cannot be recovered. Make sure the expiry date gives your recipient enough
+            time after the unlock date to retrieve the secret.
           </p>
         </div>
       </section>
