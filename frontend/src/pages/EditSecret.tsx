@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { extractFromFragment } from '../utils/urlFragments'
 import { getEditSecretStatus, updateSecretDates } from '../services/api'
-
-type DatePreset = '+1w' | '+1m' | '+1y' | 'custom'
-type ExpiryPreset = '+1w' | '+1m' | '+1y' | 'custom'
+import {
+  applyDateOffset,
+  validateExpiryDate,
+  formatDateForDisplay,
+  type ExtendPreset,
+} from '../utils/dates'
 
 type State =
   | { type: 'loading' }
@@ -27,85 +30,26 @@ export default function EditSecret() {
   const [state, setState] = useState<State>(() =>
     params.token ? { type: 'loading' } : { type: 'missing_params' },
   )
-  const [datePreset, setDatePreset] = useState<DatePreset>('+1m')
+  const [datePreset, setDatePreset] = useState<ExtendPreset>('+1m')
   const [customDate, setCustomDate] = useState('')
   const [customTime, setCustomTime] = useState('00:00')
 
   // Expiry date state
-  const [expiryPreset, setExpiryPreset] = useState<ExpiryPreset>('+1y')
+  const [expiryPreset, setExpiryPreset] = useState<ExtendPreset>('+1y')
   const [customExpiryDate, setCustomExpiryDate] = useState('')
   const [customExpiryTime, setCustomExpiryTime] = useState('00:00')
 
   // Calculate new unlock date based on preset (relative to current unlock date)
   const getNewUnlockDate = (currentUnlockAt: Date): Date | null => {
-    switch (datePreset) {
-      case '+1w':
-        return new Date(currentUnlockAt.getTime() + 7 * 24 * 60 * 60 * 1000)
-      case '+1m': {
-        const d = new Date(currentUnlockAt.getTime())
-        d.setMonth(d.getMonth() + 1)
-        return d
-      }
-      case '+1y': {
-        const d = new Date(currentUnlockAt.getTime())
-        d.setFullYear(d.getFullYear() + 1)
-        return d
-      }
-      case 'custom':
-        return customDate ? new Date(`${customDate}T${customTime}:00`) : null
-    }
+    return applyDateOffset(currentUnlockAt, datePreset, { date: customDate, time: customTime })
   }
 
   // Calculate new expiry date based on preset (relative to current expiry date)
   const getNewExpiryDate = (currentExpiresAt: Date): Date | null => {
-    switch (expiryPreset) {
-      case '+1w':
-        return new Date(currentExpiresAt.getTime() + 7 * 24 * 60 * 60 * 1000)
-      case '+1m': {
-        const d = new Date(currentExpiresAt.getTime())
-        d.setMonth(d.getMonth() + 1)
-        return d
-      }
-      case '+1y': {
-        const d = new Date(currentExpiresAt.getTime())
-        d.setFullYear(d.getFullYear() + 1)
-        return d
-      }
-      case 'custom':
-        return customExpiryDate ? new Date(`${customExpiryDate}T${customExpiryTime}:00`) : null
-    }
-  }
-
-  // Validate expiry date constraints
-  const validateExpiryDate = (newUnlockAt: Date, newExpiresAt: Date): string | null => {
-    const minGapMs = 15 * 60 * 1000 // 15 minutes in milliseconds
-    const maxExpiryMs = 5 * 365 * 24 * 60 * 60 * 1000 // ~5 years
-    const now = new Date()
-
-    if (newExpiresAt.getTime() <= newUnlockAt.getTime()) {
-      return 'Expiry date must be after unlock date'
-    }
-    if (newExpiresAt.getTime() < newUnlockAt.getTime() + minGapMs) {
-      return 'Expiry date must be at least 15 minutes after unlock date'
-    }
-    if (newExpiresAt.getTime() > now.getTime() + maxExpiryMs) {
-      return 'Expiry date cannot exceed 5 years from now'
-    }
-    return null
-  }
-
-  // Format unlock date for display
-  const formatUnlockDate = (date: Date | null) => {
-    if (!date) return null
-    return {
-      date: date.toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      }),
-      time: date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-    }
+    return applyDateOffset(currentExpiresAt, expiryPreset, {
+      date: customExpiryDate,
+      time: customExpiryTime,
+    })
   }
 
   const loadStatus = useCallback(async (editToken: string) => {
@@ -298,11 +242,11 @@ export default function EditSecret() {
 
   // state.type === 'loaded'
   const newUnlockDate = getNewUnlockDate(state.currentUnlockAt)
-  const newUnlockDisplay = formatUnlockDate(newUnlockDate)
-  const currentUnlockDisplay = formatUnlockDate(state.currentUnlockAt)
+  const newUnlockDisplay = formatDateForDisplay(newUnlockDate)
+  const currentUnlockDisplay = formatDateForDisplay(state.currentUnlockAt)
   const newExpiryDate = getNewExpiryDate(state.currentExpiresAt)
-  const newExpiryDisplay = formatUnlockDate(newExpiryDate)
-  const currentExpiryDisplay = formatUnlockDate(state.currentExpiresAt)
+  const newExpiryDisplay = formatDateForDisplay(newExpiryDate)
+  const currentExpiryDisplay = formatDateForDisplay(state.currentExpiresAt)
   const isValid =
     (datePreset !== 'custom' || (customDate && customTime)) &&
     (expiryPreset !== 'custom' || (customExpiryDate && customExpiryTime))

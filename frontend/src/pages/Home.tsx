@@ -3,12 +3,15 @@ import { generateSecret, base64ToBytes } from '../services/crypto'
 import { requestChallenge, createSecret } from '../services/api'
 import { solveChallenge } from '../services/pow'
 import { generateShareableLinks } from '../utils/urlFragments'
+import {
+  applyDateOffset,
+  validateExpiryDate,
+  formatDateForDisplay,
+  type DatePreset,
+} from '../utils/dates'
 import type { ShareableLinks } from '../types'
 
 type Step = 'input' | 'processing' | 'done'
-
-type DatePreset = '1w' | '1m' | '1y' | 'custom'
-type ExpiryPreset = '1w' | '1m' | '1y' | 'custom'
 
 export default function Home() {
   const [step, setStep] = useState<Step>('input')
@@ -32,75 +35,29 @@ export default function Home() {
   const [, setTick] = useState(0)
 
   useEffect(() => {
-    // Only tick when using non-custom presets (they depend on current time)
-    if (datePreset !== 'custom' || expiryPreset !== 'custom') {
+    // Only tick when on input step and using non-custom presets (they depend on current time)
+    if (step === 'input' && (datePreset !== 'custom' || expiryPreset !== 'custom')) {
       const interval = setInterval(() => setTick((t) => t + 1), 1000)
       return () => clearInterval(interval)
     }
-  }, [datePreset, expiryPreset])
+  }, [step, datePreset, expiryPreset])
 
   // Calculate minimum date (5 minutes from now)
   const now = new Date()
   const minDate = new Date(now.getTime() + 5 * 60 * 1000)
   const minDateStr = minDate.toISOString().split('T')[0]
 
-  // Calculate unlock date from preset (using copies to avoid mutation)
+  // Calculate unlock date from preset
   const getUnlockDate = (): Date | null => {
-    const now = new Date()
-    switch (datePreset) {
-      case '1w':
-        return new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-      case '1m': {
-        const d = new Date(now.getTime())
-        d.setMonth(d.getMonth() + 1)
-        return d
-      }
-      case '1y': {
-        const d = new Date(now.getTime())
-        d.setFullYear(d.getFullYear() + 1)
-        return d
-      }
-      case 'custom':
-        return customDate ? new Date(`${customDate}T${customTime}:00`) : null
-    }
+    return applyDateOffset(new Date(), datePreset, { date: customDate, time: customTime })
   }
 
   // Calculate expiry date from preset (relative to unlock date)
   const getExpiryDate = (unlockDate: Date): Date | null => {
-    switch (expiryPreset) {
-      case '1w':
-        return new Date(unlockDate.getTime() + 7 * 24 * 60 * 60 * 1000)
-      case '1m': {
-        const d = new Date(unlockDate.getTime())
-        d.setMonth(d.getMonth() + 1)
-        return d
-      }
-      case '1y': {
-        const d = new Date(unlockDate.getTime())
-        d.setFullYear(d.getFullYear() + 1)
-        return d
-      }
-      case 'custom':
-        return customExpiryDate ? new Date(`${customExpiryDate}T${customExpiryTime}:00`) : null
-    }
-  }
-
-  // Validate expiry date constraints
-  const validateExpiryDate = (unlockDate: Date, expiryDate: Date): string | null => {
-    const minGapMs = 15 * 60 * 1000 // 15 minutes in milliseconds
-    const maxExpiryMs = 5 * 365 * 24 * 60 * 60 * 1000 // ~5 years
-    const now = new Date()
-
-    if (expiryDate.getTime() <= unlockDate.getTime()) {
-      return 'Expiry date must be after unlock date'
-    }
-    if (expiryDate.getTime() < unlockDate.getTime() + minGapMs) {
-      return 'Expiry date must be at least 15 minutes after unlock date'
-    }
-    if (expiryDate.getTime() > now.getTime() + maxExpiryMs) {
-      return 'Expiry date cannot exceed 5 years from now'
-    }
-    return null
+    return applyDateOffset(unlockDate, expiryPreset, {
+      date: customExpiryDate,
+      time: customExpiryTime,
+    })
   }
 
   // Check if form is valid
@@ -310,21 +267,7 @@ export default function Home() {
     )
   }
 
-  // Format unlock date for display
-  const formatUnlockDate = (date: Date | null) => {
-    if (!date) return null
-    return {
-      date: date.toLocaleDateString(undefined, {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      }),
-      time: date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }),
-    }
-  }
-
-  const unlockDateDisplay = formatUnlockDate(getUnlockDate())
+  const unlockDateDisplay = formatDateForDisplay(getUnlockDate())
 
   return (
     <div className="home">
@@ -443,8 +386,8 @@ export default function Home() {
 
           {getUnlockDate() && getExpiryDate(getUnlockDate()!) && (
             <p className="unlock-preview">
-              Expires: {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date} at{' '}
-              {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.time}
+              Expires: {formatDateForDisplay(getExpiryDate(getUnlockDate()!))?.date} at{' '}
+              {formatDateForDisplay(getExpiryDate(getUnlockDate()!))?.time}
             </p>
           )}
 
