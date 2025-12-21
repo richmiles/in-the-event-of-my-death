@@ -25,7 +25,7 @@ export default function Home() {
   const [copied, setCopied] = useState<'edit' | 'view' | null>(null)
 
   // Expiry date state
-  const [expiryPreset, setExpiryPreset] = useState<ExpiryPreset>('1y')
+  const [expiryPreset, setExpiryPreset] = useState<DatePreset>('1y')
   const [customExpiryDate, setCustomExpiryDate] = useState('')
   const [customExpiryTime, setCustomExpiryTime] = useState('00:00')
   const [createdUnlockAt, setCreatedUnlockAt] = useState<Date | null>(null)

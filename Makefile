@@ -48,7 +48,8 @@ format-check:
 	cd frontend && npm run format
 
 typecheck:
-	cd frontend && npx tsc --noEmit
+	# Use project references so the app config is actually typechecked
+	cd frontend && npx tsc -b
 
 check: lint format-check typecheck test
 
