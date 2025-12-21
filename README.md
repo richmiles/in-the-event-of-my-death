@@ -28,7 +28,7 @@ The application consists of three main components:
 - RESTful API for secret management
 - Time-based access control enforcement
 - Proof-of-work challenge generation and verification
-- Encrypted secret storage with SQLite/PostgreSQL
+- Encrypted secret storage with SQLAlchemy (database-agnostic)
 - Located in `/backend`
 
 ### Frontend (React + TypeScript + Vite)
@@ -38,7 +38,8 @@ The application consists of three main components:
 - Located in `/frontend`
 
 ### Database
-- SQLite for development, PostgreSQL for production
+- SQLite for local development (configured via DATABASE_URL)
+- SQLAlchemy ORM supports various production databases
 - Stores only encrypted ciphertext and minimal metadata
 - Automated cleanup of expired secrets
 
@@ -171,7 +172,7 @@ POW_DIFFICULTY=20
 **Note:** Deployment scripts and configuration live in a separate private repository to maintain security and separation of concerns. This public repository contains only the application code.
 
 For production deployment, you will need to:
-- Set up a PostgreSQL database
+- Set up a production database (the application uses SQLAlchemy and supports multiple database backends)
 - Configure environment variables
 - Set up HTTPS/TLS
 - Implement proper rate limiting
