@@ -15,7 +15,7 @@ def create_secret(
     unlock_at: datetime,
     edit_token: str,
     decrypt_token: str,
-    expires_at: datetime | None = None,
+    expires_at: datetime,
 ) -> Secret:
     """
     Create a new secret with hashed tokens.
@@ -68,11 +68,13 @@ def find_secret_by_decrypt_token(db: Session, decrypt_token: str) -> Secret | No
     return None
 
 
-def extend_unlock_date(db: Session, secret: Secret, new_unlock_at: datetime) -> Secret:
+def update_secret_dates(
+    db: Session, secret: Secret, new_unlock_at: datetime, new_expires_at: datetime
+) -> Secret:
     """
-    Extend the unlock date of a secret.
+    Update the unlock and expiry dates of a secret.
 
-    The new date must be after the current unlock date.
+    The new unlock date must be after the current unlock date.
     """
     if new_unlock_at <= secret.unlock_at:
         raise ValueError("New unlock date must be after current unlock date")
@@ -84,6 +86,7 @@ def extend_unlock_date(db: Session, secret: Secret, new_unlock_at: datetime) -> 
         raise ValueError("Cannot edit a secret that has already unlocked")
 
     secret.unlock_at = new_unlock_at
+    secret.expires_at = new_expires_at
     db.commit()
     db.refresh(secret)
 
@@ -98,19 +101,27 @@ def retrieve_secret(db: Session, secret: Secret) -> dict:
     """
     now = datetime.now(UTC).replace(tzinfo=None)
 
+    # Check if already retrieved
+    if secret.retrieved_at is not None:
+        return {
+            "status": "retrieved",
+            "message": "This secret has already been retrieved and is no longer available",
+        }
+
+    # Check if expired
+    if now >= secret.expires_at:
+        return {
+            "status": "expired",
+            "unlock_at": secret.unlock_at,
+            "message": "This secret has expired and is no longer available",
+        }
+
     # Check if unlocked
     if now < secret.unlock_at:
         return {
             "status": "pending",
             "unlock_at": secret.unlock_at,
             "message": "Secret not yet available",
-        }
-
-    # Check if already retrieved
-    if secret.retrieved_at is not None:
-        return {
-            "status": "retrieved",
-            "message": "This secret has already been retrieved and is no longer available",
         }
 
     # Mark as retrieved and prepare for deletion
@@ -138,6 +149,14 @@ def get_secret_status(db: Session, secret: Secret) -> dict:
         return {
             "exists": True,
             "status": "retrieved",
+            "unlock_at": secret.unlock_at,
+            "expires_at": secret.expires_at,
+        }
+
+    if now >= secret.expires_at:
+        return {
+            "exists": True,
+            "status": "expired",
             "unlock_at": secret.unlock_at,
             "expires_at": secret.expires_at,
         }
@@ -181,8 +200,7 @@ def delete_expired_secrets(db: Session) -> int:
     result = (
         db.query(Secret)
         .filter(
-            Secret.expires_at != None,  # noqa: E711
-            Secret.expires_at < now,
+            Secret.expires_at <= now,
             Secret.retrieved_at == None,  # noqa: E711
             Secret.is_deleted == False,  # noqa: E712
         )

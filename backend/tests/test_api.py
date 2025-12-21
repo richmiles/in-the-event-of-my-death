@@ -109,6 +109,7 @@ class TestSecrets:
 
         # Step 3: Create secret
         unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
         create_response = client.post(
             "/api/v1/secrets",
             json={
@@ -116,6 +117,7 @@ class TestSecrets:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -131,6 +133,7 @@ class TestSecrets:
         data = create_response.json()
         assert "secret_id" in data
         assert "unlock_at" in data
+        assert "expires_at" in data
         assert "created_at" in data
 
     def test_retrieve_before_unlock(self, client):
@@ -152,6 +155,7 @@ class TestSecrets:
 
         # Create secret with future unlock date
         unlock_at = utcnow() + timedelta(days=1)
+        expires_at = utcnow() + timedelta(days=7)
         client.post(
             "/api/v1/secrets",
             json={
@@ -159,6 +163,7 @@ class TestSecrets:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -197,6 +202,7 @@ class TestSecrets:
 
         # Create secret
         unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
         client.post(
             "/api/v1/secrets",
             json={
@@ -204,6 +210,7 @@ class TestSecrets:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -226,6 +233,7 @@ class TestSecrets:
         assert data["exists"] is True
         assert data["status"] == "pending"
         assert "unlock_at" in data
+        assert "expires_at" in data
 
     def test_invalid_token(self, client):
         """Test that invalid tokens are rejected."""
@@ -258,6 +266,7 @@ class TestSecrets:
 
         # Create secret
         unlock_at = utcnow() + timedelta(hours=24)
+        expires_at = utcnow() + timedelta(days=7)
         create_response = client.post(
             "/api/v1/secrets",
             json={
@@ -265,6 +274,7 @@ class TestSecrets:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -289,6 +299,7 @@ class TestSecrets:
         assert data["exists"] is True
         assert data["status"] == "pending"
         assert "unlock_at" in data
+        assert "expires_at" in data
 
     def test_pow_challenge_reuse_rejected(self, client):
         """Test that PoW challenges cannot be reused."""
@@ -309,6 +320,7 @@ class TestSecrets:
 
         # Create first secret
         unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
         first_response = client.post(
             "/api/v1/secrets",
             json={
@@ -316,6 +328,7 @@ class TestSecrets:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -337,6 +350,7 @@ class TestSecrets:
                 "iv": test_data2["iv"],
                 "auth_tag": test_data2["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data2["edit_token"],
                 "decrypt_token": test_data2["decrypt_token"],
                 "pow_proof": {
@@ -368,6 +382,7 @@ class TestValidation:
         challenge = challenge_response.json()
 
         unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
         response = client.post(
             "/api/v1/secrets",
             json={
@@ -375,6 +390,7 @@ class TestValidation:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -402,6 +418,7 @@ class TestValidation:
         challenge = challenge_response.json()
 
         unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
         response = client.post(
             "/api/v1/secrets",
             json={
@@ -409,6 +426,7 @@ class TestValidation:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -435,6 +453,7 @@ class TestValidation:
         challenge = challenge_response.json()
 
         unlock_at = utcnow() + timedelta(minutes=1)  # Too soon
+        expires_at = utcnow() + timedelta(days=7)
         response = client.post(
             "/api/v1/secrets",
             json={
@@ -442,6 +461,7 @@ class TestValidation:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -483,6 +503,7 @@ class TestPowHardening:
         # Try to create secret with DIFFERENT ciphertext but same PoW proof
         different_data = generate_test_data()
         unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
 
         response = client.post(
             "/api/v1/secrets",
@@ -491,6 +512,7 @@ class TestPowHardening:
                 "iv": different_data["iv"],
                 "auth_tag": different_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": different_data["edit_token"],
                 "decrypt_token": different_data["decrypt_token"],
                 "pow_proof": {
@@ -535,6 +557,7 @@ class TestPowHardening:
 
         # Submit with actual small data - should succeed (overpay OK)
         unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
         response = client.post(
             "/api/v1/secrets",
             json={
@@ -542,6 +565,7 @@ class TestPowHardening:
                 "iv": small_data["iv"],
                 "auth_tag": small_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": small_data["edit_token"],
                 "decrypt_token": small_data["decrypt_token"],
                 "pow_proof": {
@@ -574,6 +598,7 @@ class TestPowHardening:
 
         # Try to create secret with invalid unlock date (too soon)
         unlock_at = utcnow() + timedelta(minutes=1)  # Invalid - too soon
+        expires_at = utcnow() + timedelta(days=7)
         first_response = client.post(
             "/api/v1/secrets",
             json={
@@ -581,6 +606,7 @@ class TestPowHardening:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -602,6 +628,7 @@ class TestPowHardening:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": valid_unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -664,8 +691,8 @@ class TestExpiryFeature:
         assert "expires_at" in data
         assert "created_at" in data
 
-    def test_create_secret_without_expires_at(self, client):
-        """Test creating a secret without expires_at (should be optional)."""
+    def test_create_secret_without_expires_at_rejected(self, client):
+        """Test that creating a secret without expires_at is rejected (required field)."""
         test_data = generate_test_data()
         payload_hash = compute_payload_hash(
             test_data["ciphertext_bytes"],
@@ -681,7 +708,7 @@ class TestExpiryFeature:
         challenge = challenge_response.json()
         counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
 
-        # Create secret without expires_at
+        # Try to create secret without expires_at
         unlock_at = utcnow() + timedelta(hours=1)
         create_response = client.post(
             "/api/v1/secrets",
@@ -690,6 +717,7 @@ class TestExpiryFeature:
                 "iv": test_data["iv"],
                 "auth_tag": test_data["auth_tag"],
                 "unlock_at": unlock_at.isoformat(),
+                # expires_at intentionally omitted
                 "edit_token": test_data["edit_token"],
                 "decrypt_token": test_data["decrypt_token"],
                 "pow_proof": {
@@ -701,10 +729,49 @@ class TestExpiryFeature:
             },
         )
 
-        assert create_response.status_code == 201
-        data = create_response.json()
-        assert "secret_id" in data
-        assert data.get("expires_at") is None
+        assert create_response.status_code == 422  # Validation error - missing required field
+
+    def test_expires_at_minimum_gap_enforced(self, client):
+        """Test that expires_at must be at least 15 minutes after unlock_at."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Try to create secret with expires_at only 5 minutes after unlock_at
+        unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = unlock_at + timedelta(minutes=5)  # Only 5 minutes gap - too short
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 422
+        assert "15 minutes" in str(create_response.json()).lower()
 
     def test_expires_at_must_be_after_unlock_at(self, client):
         """Test that expires_at must be after unlock_at."""
@@ -726,6 +793,48 @@ class TestExpiryFeature:
         # Try to create secret with expires_at before unlock_at
         unlock_at = utcnow() + timedelta(hours=2)
         expires_at = utcnow() + timedelta(hours=1)  # Before unlock_at
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 422
+        assert "after unlock_at" in str(create_response.json()).lower()
+
+    def test_expires_at_equal_to_unlock_at_rejected(self, client):
+        """Test that expires_at equal to unlock_at is rejected."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Try to create secret with expires_at equal to unlock_at
+        unlock_at = utcnow() + timedelta(hours=2)
+        expires_at = unlock_at  # Same as unlock_at
         create_response = client.post(
             "/api/v1/secrets",
             json={

@@ -22,11 +22,11 @@ from app.services.pow_service import (
 )
 from app.services.secret_service import (
     create_secret,
-    extend_unlock_date,
     find_secret_by_decrypt_token,
     find_secret_by_edit_token,
     get_secret_status,
     retrieve_secret,
+    update_secret_dates,
 )
 
 router = APIRouter()
@@ -142,13 +142,14 @@ async def edit_secret(
         raise HTTPException(status_code=404, detail="Secret not found")
 
     try:
-        updated_secret = extend_unlock_date(db, secret, edit_data.unlock_at)
+        updated_secret = update_secret_dates(db, secret, edit_data.unlock_at, edit_data.expires_at)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     return SecretEditResponse(
         secret_id=updated_secret.id,
         unlock_at=updated_secret.unlock_at,
+        expires_at=updated_secret.expires_at,
         updated_at=updated_secret.unlock_at,  # Using unlock_at as proxy for updated_at
     )
 
@@ -186,6 +187,16 @@ async def retrieve_secret_endpoint(
 
     if result["status"] == "retrieved":
         raise HTTPException(status_code=410, detail=result["message"])
+
+    if result["status"] == "expired":
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "status": "expired",
+                "expires_at": secret.expires_at.isoformat(),
+                "message": result["message"],
+            },
+        )
 
     return SecretRetrieveResponse(**result)
 

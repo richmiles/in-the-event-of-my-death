@@ -84,34 +84,6 @@ class TestDeleteExpiredSecrets:
         db_session.refresh(non_expired_secret)
         assert non_expired_secret.is_deleted is False
 
-    def test_dont_delete_secrets_without_expires_at(self, db_session, sample_tokens):
-        """Test that secrets without expires_at are not marked as deleted."""
-        # Create test data
-        iv = base64.b64encode(secrets.token_bytes(12)).decode()
-        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
-        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
-
-        # Create a secret without expires_at
-        unlock_at = utcnow() + timedelta(hours=1)
-        secret_no_expiry = create_secret(
-            db=db_session,
-            ciphertext_b64=ciphertext,
-            iv_b64=iv,
-            auth_tag_b64=auth_tag,
-            unlock_at=unlock_at,
-            edit_token=sample_tokens["edit_token"],
-            decrypt_token=sample_tokens["decrypt_token"],
-            expires_at=None,
-        )
-
-        # Run the delete expired secrets function
-        deleted_count = delete_expired_secrets(db_session)
-
-        # Verify the secret was not deleted
-        assert deleted_count == 0
-        db_session.refresh(secret_no_expiry)
-        assert secret_no_expiry.is_deleted is False
-
     def test_dont_delete_already_retrieved_secrets(self, db_session, sample_tokens):
         """Test that already retrieved secrets are not marked as deleted again."""
         # Create test data
