@@ -190,7 +190,7 @@ This project implements several security measures:
 
 ### Reporting Security Issues
 
-If you discover a security vulnerability, please email security@intheeventofmydeath.com instead of using the public issue tracker.
+If you discover a security vulnerability, please open a security advisory on GitHub instead of using the public issue tracker.
 
 ## Contributing
 
