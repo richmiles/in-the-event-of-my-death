@@ -1,10 +1,20 @@
 import base64
 import re
 from datetime import UTC, datetime, timedelta
+from typing import Annotated
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, PlainSerializer, field_validator, model_validator
 
 from app.config import settings
+
+
+def serialize_datetime_utc(dt: datetime) -> str:
+    """Serialize datetime as ISO format with Z suffix to indicate UTC."""
+    return dt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
+
+
+# Custom type that serializes naive datetimes with Z suffix
+UTCDateTime = Annotated[datetime, PlainSerializer(serialize_datetime_utc)]
 
 
 def strict_base64_decode(value: str, field_name: str) -> bytes:
@@ -37,6 +47,7 @@ class SecretCreate(BaseModel):
     iv: str = Field(..., description="Base64 encoded 12-byte IV")
     auth_tag: str = Field(..., description="Base64 encoded 16-byte auth tag")
     unlock_at: datetime
+    expires_at: datetime
     edit_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     decrypt_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     pow_proof: PowProof
@@ -74,7 +85,7 @@ class SecretCreate(BaseModel):
         min_unlock = now + timedelta(minutes=settings.min_unlock_minutes)
         max_unlock = now + timedelta(days=settings.max_unlock_days)
 
-        # Make v timezone-naive for comparison
+        # Convert to naive UTC for storage
         v_naive = v.replace(tzinfo=None) if v.tzinfo else v
 
         if v_naive < min_unlock:
@@ -85,15 +96,40 @@ class SecretCreate(BaseModel):
             raise ValueError(f"Unlock date cannot exceed {settings.max_unlock_days} days")
         return v_naive
 
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expires_at(cls, v: datetime) -> datetime:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        max_expiry = now + timedelta(days=settings.max_expiry_days)
+
+        # Convert to naive UTC for storage
+        v_naive = v.replace(tzinfo=None) if v.tzinfo else v
+
+        if v_naive > max_expiry:
+            raise ValueError(f"Expiry date cannot exceed {settings.max_expiry_days} days")
+        return v_naive
+
+    @model_validator(mode="after")
+    def validate_expiry_constraints(self) -> "SecretCreate":
+        min_gap = timedelta(minutes=settings.min_expiry_gap_minutes)
+        if self.expires_at <= self.unlock_at:
+            raise ValueError("expires_at must be after unlock_at")
+        if self.expires_at < self.unlock_at + min_gap:
+            min_gap_mins = settings.min_expiry_gap_minutes
+            raise ValueError(f"expires_at must be at least {min_gap_mins} minutes after unlock_at")
+        return self
+
 
 class SecretCreateResponse(BaseModel):
     secret_id: str
-    unlock_at: datetime
-    created_at: datetime
+    unlock_at: UTCDateTime
+    expires_at: UTCDateTime
+    created_at: UTCDateTime
 
 
 class SecretEditRequest(BaseModel):
     unlock_at: datetime
+    expires_at: datetime
 
     @field_validator("unlock_at")
     @classmethod
@@ -105,17 +141,39 @@ class SecretEditRequest(BaseModel):
             raise ValueError(f"Unlock date cannot exceed {settings.max_unlock_days} days")
         return v_naive
 
+    @field_validator("expires_at")
+    @classmethod
+    def validate_expires_at(cls, v: datetime) -> datetime:
+        now = datetime.now(UTC).replace(tzinfo=None)
+        max_expiry = now + timedelta(days=settings.max_expiry_days)
+        v_naive = v.replace(tzinfo=None) if v.tzinfo else v
+        if v_naive > max_expiry:
+            raise ValueError(f"Expiry date cannot exceed {settings.max_expiry_days} days")
+        return v_naive
+
+    @model_validator(mode="after")
+    def validate_expiry_constraints(self) -> "SecretEditRequest":
+        min_gap = timedelta(minutes=settings.min_expiry_gap_minutes)
+        if self.expires_at <= self.unlock_at:
+            raise ValueError("expires_at must be after unlock_at")
+        if self.expires_at < self.unlock_at + min_gap:
+            min_gap_mins = settings.min_expiry_gap_minutes
+            raise ValueError(f"expires_at must be at least {min_gap_mins} minutes after unlock_at")
+        return self
+
 
 class SecretEditResponse(BaseModel):
     secret_id: str
-    unlock_at: datetime
-    updated_at: datetime
+    unlock_at: UTCDateTime
+    expires_at: UTCDateTime
+    updated_at: UTCDateTime
 
 
 class SecretStatusResponse(BaseModel):
     exists: bool
-    status: str  # "pending" | "available" | "retrieved"
-    unlock_at: datetime | None = None
+    status: str  # "pending" | "available" | "expired" | "retrieved"
+    unlock_at: UTCDateTime | None = None
+    expires_at: UTCDateTime | None = None  # None only when exists=False
 
 
 class SecretRetrieveResponse(BaseModel):
@@ -123,6 +181,6 @@ class SecretRetrieveResponse(BaseModel):
     ciphertext: str | None = None
     iv: str | None = None
     auth_tag: str | None = None
-    unlock_at: datetime | None = None
-    retrieved_at: datetime | None = None
+    unlock_at: UTCDateTime | None = None
+    retrieved_at: UTCDateTime | None = None
     message: str | None = None

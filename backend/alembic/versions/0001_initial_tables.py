@@ -2,7 +2,7 @@
 
 Revision ID: 0001
 Revises:
-Create Date: 2025-01-20
+Create Date: 2025-12-20
 
 """
 
@@ -30,6 +30,7 @@ def upgrade() -> None:
         sa.Column("iv", sa.LargeBinary(12), nullable=False),
         sa.Column("auth_tag", sa.LargeBinary(16), nullable=False),
         sa.Column("unlock_at", sa.DateTime, nullable=False),
+        sa.Column("expires_at", sa.DateTime, nullable=False),
         sa.Column("created_at", sa.DateTime, nullable=False),
         sa.Column("retrieved_at", sa.DateTime, nullable=True),
         sa.Column("ciphertext_size", sa.Integer, nullable=False),
@@ -38,6 +39,7 @@ def upgrade() -> None:
 
     # Create indexes for secrets table
     op.create_index("ix_secrets_unlock_at", "secrets", ["unlock_at"])
+    op.create_index("ix_secrets_expires_at", "secrets", ["expires_at"])
     op.create_index("ix_secrets_edit_token_hash", "secrets", ["edit_token_hash"])
     op.create_index("ix_secrets_decrypt_token_hash", "secrets", ["decrypt_token_hash"])
 
@@ -64,6 +66,7 @@ def downgrade() -> None:
     op.drop_index("ix_pow_challenges_nonce", table_name="pow_challenges")
     op.drop_table("pow_challenges")
 
+    op.drop_index("ix_secrets_expires_at", table_name="secrets")
     op.drop_index("ix_secrets_decrypt_token_hash", table_name="secrets")
     op.drop_index("ix_secrets_edit_token_hash", table_name="secrets")
     op.drop_index("ix_secrets_unlock_at", table_name="secrets")
