@@ -24,16 +24,6 @@ function App() {
           <div className="footer-content">
             <p className="footer-line">
               <Link to="/about">About</Link>
-              <span className="footer-separator">|</span>
-              <a
-                href="https://github.com/richmiles/in-the-event-of-my-death"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Open Source
-              </a>
-              <span className="footer-separator">–</span>
-              <span>Built with end-to-end encryption; your data stays yours.</span>
             </p>
           </div>
         </footer>
