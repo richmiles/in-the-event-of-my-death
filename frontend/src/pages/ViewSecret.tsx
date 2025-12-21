@@ -6,11 +6,12 @@ import { decrypt } from '../services/crypto'
 type State =
   | { type: 'loading' }
   | { type: 'missing_params' }
-  | { type: 'pending'; unlockAt: Date }
+  | { type: 'pending'; unlockAt: Date; expiresAt?: Date }
   | { type: 'ready' }
   | { type: 'retrieving' }
   | { type: 'decrypted'; message: string }
   | { type: 'already_retrieved' }
+  | { type: 'expired' }
   | { type: 'not_found' }
   | { type: 'error'; message: string }
 
@@ -40,8 +41,17 @@ export default function ViewSecret() {
         return
       }
 
+      if (status.status === 'expired') {
+        setState({ type: 'expired' })
+        return
+      }
+
       if (status.status === 'pending' && status.unlock_at) {
-        setState({ type: 'pending', unlockAt: new Date(status.unlock_at) })
+        setState({
+          type: 'pending',
+          unlockAt: new Date(status.unlock_at),
+          expiresAt: status.expires_at ? new Date(status.expires_at) : undefined,
+        })
         return
       }
 
@@ -182,6 +192,18 @@ export default function ViewSecret() {
     )
   }
 
+  if (state.type === 'expired') {
+    return (
+      <div className="view-secret">
+        <h1>Secret Expired</h1>
+        <p>
+          This secret has expired and is no longer available. The secret was automatically deleted
+          after its expiry date.
+        </p>
+      </div>
+    )
+  }
+
   if (state.type === 'pending') {
     return (
       <div className="view-secret">
@@ -191,6 +213,12 @@ export default function ViewSecret() {
         <p className="unlock-date">
           Unlocks on: {state.unlockAt.toLocaleDateString()} at {state.unlockAt.toLocaleTimeString()}
         </p>
+        {state.expiresAt && (
+          <p className="expiry-date">
+            Expires on: {state.expiresAt.toLocaleDateString()} at{' '}
+            {state.expiresAt.toLocaleTimeString()}
+          </p>
+        )}
       </div>
     )
   }

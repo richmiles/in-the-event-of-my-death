@@ -8,6 +8,7 @@ import type { ShareableLinks } from '../types'
 type Step = 'input' | 'processing' | 'done'
 
 type DatePreset = '1w' | '1m' | '1y' | 'custom'
+type ExpiryPreset = '1w' | '1m' | '1y' | 'never' | 'custom'
 
 export default function Home() {
   const [step, setStep] = useState<Step>('input')
@@ -19,6 +20,14 @@ export default function Home() {
   const [progress, setProgress] = useState<string>('')
   const [links, setLinks] = useState<ShareableLinks | null>(null)
   const [copied, setCopied] = useState<'edit' | 'view' | null>(null)
+
+  // Expiry date state
+  const [showExpiryOptions, setShowExpiryOptions] = useState(false)
+  const [expiryPreset, setExpiryPreset] = useState<ExpiryPreset>('1y')
+  const [customExpiryDate, setCustomExpiryDate] = useState('')
+  const [customExpiryTime, setCustomExpiryTime] = useState('00:00')
+  const [createdUnlockAt, setCreatedUnlockAt] = useState<Date | null>(null)
+  const [createdExpiresAt, setCreatedExpiresAt] = useState<Date | null>(null)
 
   // Calculate minimum date (5 minutes from now)
   const now = new Date()
@@ -46,8 +55,56 @@ export default function Home() {
     }
   }
 
+  // Calculate expiry date from preset (relative to unlock date)
+  const getExpiryDate = (unlockDate: Date): Date | null => {
+    switch (expiryPreset) {
+      case '1w':
+        return new Date(unlockDate.getTime() + 7 * 24 * 60 * 60 * 1000)
+      case '1m': {
+        const d = new Date(unlockDate.getTime())
+        d.setMonth(d.getMonth() + 1)
+        return d
+      }
+      case '1y': {
+        const d = new Date(unlockDate.getTime())
+        d.setFullYear(d.getFullYear() + 1)
+        return d
+      }
+      case 'never': {
+        // Max 5 years from now (backend constraint)
+        const now = new Date()
+        const d = new Date(now.getTime())
+        d.setFullYear(d.getFullYear() + 5)
+        return d
+      }
+      case 'custom':
+        return customExpiryDate ? new Date(`${customExpiryDate}T${customExpiryTime}:00`) : null
+    }
+  }
+
+  // Validate expiry date constraints
+  const validateExpiryDate = (unlockDate: Date, expiryDate: Date): string | null => {
+    const minGapMs = 15 * 60 * 1000 // 15 minutes in milliseconds
+    const maxExpiryMs = 5 * 365 * 24 * 60 * 60 * 1000 // ~5 years
+    const now = new Date()
+
+    if (expiryDate.getTime() <= unlockDate.getTime()) {
+      return 'Expiry date must be after unlock date'
+    }
+    if (expiryDate.getTime() < unlockDate.getTime() + minGapMs) {
+      return 'Expiry date must be at least 15 minutes after unlock date'
+    }
+    if (expiryDate.getTime() > now.getTime() + maxExpiryMs) {
+      return 'Expiry date cannot exceed 5 years from now'
+    }
+    return null
+  }
+
   // Check if form is valid
-  const isValid = message.trim() && (datePreset !== 'custom' || (customDate && customTime))
+  const isValid =
+    message.trim() &&
+    (datePreset !== 'custom' || (customDate && customTime)) &&
+    (!showExpiryOptions || expiryPreset !== 'custom' || (customExpiryDate && customExpiryTime))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,6 +118,20 @@ export default function Home() {
 
     if (unlockAt <= new Date()) {
       setError('Unlock date must be in the future')
+      return
+    }
+
+    // Calculate expiry date (default: 1 year after unlock)
+    const expiresAt = getExpiryDate(unlockAt)
+    if (!expiresAt) {
+      setError('Please select an expiry date')
+      return
+    }
+
+    // Validate expiry constraints
+    const expiryError = validateExpiryDate(unlockAt, expiresAt)
+    if (expiryError) {
+      setError(expiryError)
       return
     }
 
@@ -89,6 +160,7 @@ export default function Home() {
         iv: secret.encrypted.iv,
         auth_tag: secret.encrypted.authTag,
         unlock_at: unlockAt.toISOString(),
+        expires_at: expiresAt.toISOString(),
         edit_token: secret.editToken,
         decrypt_token: secret.decryptToken,
         pow_proof: powProof,
@@ -102,6 +174,8 @@ export default function Home() {
       )
 
       setLinks(shareableLinks)
+      setCreatedUnlockAt(unlockAt)
+      setCreatedExpiresAt(expiresAt)
       setStep('done')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
@@ -121,6 +195,12 @@ export default function Home() {
     setDatePreset('1m')
     setCustomDate('')
     setCustomTime('00:00')
+    setShowExpiryOptions(false)
+    setExpiryPreset('1y')
+    setCustomExpiryDate('')
+    setCustomExpiryTime('00:00')
+    setCreatedUnlockAt(null)
+    setCreatedExpiresAt(null)
     setLinks(null)
     setError(null)
   }
@@ -151,6 +231,39 @@ export default function Home() {
               them again!
             </p>
           </div>
+
+          {createdUnlockAt && createdExpiresAt && (
+            <div className="dates-info">
+              <p>
+                <strong>Unlocks:</strong>{' '}
+                {createdUnlockAt.toLocaleDateString(undefined, {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}{' '}
+                at{' '}
+                {createdUnlockAt.toLocaleTimeString(undefined, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </p>
+              <p>
+                <strong>Expires:</strong>{' '}
+                {createdExpiresAt.toLocaleDateString(undefined, {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                  year: 'numeric',
+                })}{' '}
+                at{' '}
+                {createdExpiresAt.toLocaleTimeString(undefined, {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </p>
+            </div>
+          )}
 
           <div className="links-section">
             <div className="link-box">
@@ -292,6 +405,102 @@ export default function Home() {
 
           {datePreset === 'custom' && !customDate && (
             <p className="field-hint">Select a date to continue</p>
+          )}
+
+          {/* Expiry options toggle */}
+          <button
+            type="button"
+            className="expiry-toggle"
+            onClick={() => setShowExpiryOptions(!showExpiryOptions)}
+          >
+            {showExpiryOptions ? 'Hide expiry options' : 'Customize expiry date'}
+            <span className={`toggle-arrow ${showExpiryOptions ? 'expanded' : ''}`}>&#9662;</span>
+          </button>
+
+          {showExpiryOptions && (
+            <div className="expiry-section">
+              <div className="date-presets">
+                <span className="presets-label">Expires:</span>
+                <button
+                  type="button"
+                  className={expiryPreset === '1w' ? 'active' : ''}
+                  onClick={() => setExpiryPreset('1w')}
+                >
+                  +1 Week
+                </button>
+                <button
+                  type="button"
+                  className={expiryPreset === '1m' ? 'active' : ''}
+                  onClick={() => setExpiryPreset('1m')}
+                >
+                  +1 Month
+                </button>
+                <button
+                  type="button"
+                  className={expiryPreset === '1y' ? 'active' : ''}
+                  onClick={() => setExpiryPreset('1y')}
+                >
+                  +1 Year
+                </button>
+                <button
+                  type="button"
+                  className={expiryPreset === 'never' ? 'active' : ''}
+                  onClick={() => setExpiryPreset('never')}
+                >
+                  Never
+                </button>
+                <button
+                  type="button"
+                  className={expiryPreset === 'custom' ? 'active' : ''}
+                  onClick={() => setExpiryPreset('custom')}
+                >
+                  Custom
+                </button>
+              </div>
+
+              {getUnlockDate() && getExpiryDate(getUnlockDate()!) && (
+                <p className="unlock-preview">
+                  Expires: {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date} at{' '}
+                  {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.time}
+                </p>
+              )}
+
+              {expiryPreset === 'custom' && (
+                <div className="custom-date-row">
+                  <div className="form-group">
+                    <label htmlFor="custom-expiry-date">Date</label>
+                    <input
+                      type="date"
+                      id="custom-expiry-date"
+                      value={customExpiryDate}
+                      onChange={(e) => setCustomExpiryDate(e.target.value)}
+                      min={getUnlockDate()?.toISOString().split('T')[0] || minDateStr}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="custom-expiry-time">Time</label>
+                    <input
+                      type="time"
+                      id="custom-expiry-time"
+                      value={customExpiryTime}
+                      onChange={(e) => setCustomExpiryTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {expiryPreset === 'custom' && !customExpiryDate && (
+                <p className="field-hint">Select an expiry date to continue</p>
+              )}
+            </div>
+          )}
+
+          {/* Show default expiry when options hidden */}
+          {!showExpiryOptions && getUnlockDate() && (
+            <p className="field-hint expiry-hint">
+              Expires 1 year after unlock ({formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date}
+              )
+            </p>
           )}
 
           <button

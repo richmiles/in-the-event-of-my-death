@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { extractFromFragment } from '../utils/urlFragments'
-import { getEditSecretStatus, extendUnlockDate } from '../services/api'
+import { getEditSecretStatus, updateSecretDates } from '../services/api'
 
 type DatePreset = '+1w' | '+1m' | '+1y' | 'custom'
+type ExpiryPreset = '+1w' | '+1m' | '+1y' | 'never' | 'custom'
 
 type State =
   | { type: 'loading' }
   | { type: 'missing_params' }
-  | { type: 'loaded'; currentUnlockAt: Date }
+  | { type: 'loaded'; currentUnlockAt: Date; currentExpiresAt: Date }
   | { type: 'saving' }
-  | { type: 'saved'; newUnlockAt: Date }
+  | { type: 'saved'; newUnlockAt: Date; newExpiresAt: Date }
   | { type: 'already_unlocked' }
   | { type: 'already_retrieved' }
+  | { type: 'expired' }
   | { type: 'not_found' }
   | { type: 'error'; message: string }
 
@@ -28,6 +30,11 @@ export default function EditSecret() {
   const [datePreset, setDatePreset] = useState<DatePreset>('+1m')
   const [customDate, setCustomDate] = useState('')
   const [customTime, setCustomTime] = useState('00:00')
+
+  // Expiry date state
+  const [expiryPreset, setExpiryPreset] = useState<ExpiryPreset>('+1y')
+  const [customExpiryDate, setCustomExpiryDate] = useState('')
+  const [customExpiryTime, setCustomExpiryTime] = useState('00:00')
 
   // Calculate new unlock date based on preset (relative to current unlock date)
   const getNewUnlockDate = (currentUnlockAt: Date): Date | null => {
@@ -47,6 +54,51 @@ export default function EditSecret() {
       case 'custom':
         return customDate ? new Date(`${customDate}T${customTime}:00`) : null
     }
+  }
+
+  // Calculate new expiry date based on preset (relative to current expiry date)
+  const getNewExpiryDate = (currentExpiresAt: Date): Date | null => {
+    switch (expiryPreset) {
+      case '+1w':
+        return new Date(currentExpiresAt.getTime() + 7 * 24 * 60 * 60 * 1000)
+      case '+1m': {
+        const d = new Date(currentExpiresAt.getTime())
+        d.setMonth(d.getMonth() + 1)
+        return d
+      }
+      case '+1y': {
+        const d = new Date(currentExpiresAt.getTime())
+        d.setFullYear(d.getFullYear() + 1)
+        return d
+      }
+      case 'never': {
+        // Max 5 years from now (backend constraint)
+        const now = new Date()
+        const d = new Date(now.getTime())
+        d.setFullYear(d.getFullYear() + 5)
+        return d
+      }
+      case 'custom':
+        return customExpiryDate ? new Date(`${customExpiryDate}T${customExpiryTime}:00`) : null
+    }
+  }
+
+  // Validate expiry date constraints
+  const validateExpiryDate = (newUnlockAt: Date, newExpiresAt: Date): string | null => {
+    const minGapMs = 15 * 60 * 1000 // 15 minutes in milliseconds
+    const maxExpiryMs = 5 * 365 * 24 * 60 * 60 * 1000 // ~5 years
+    const now = new Date()
+
+    if (newExpiresAt.getTime() <= newUnlockAt.getTime()) {
+      return 'Expiry date must be after unlock date'
+    }
+    if (newExpiresAt.getTime() < newUnlockAt.getTime() + minGapMs) {
+      return 'Expiry date must be at least 15 minutes after unlock date'
+    }
+    if (newExpiresAt.getTime() > now.getTime() + maxExpiryMs) {
+      return 'Expiry date cannot exceed 5 years from now'
+    }
+    return null
   }
 
   // Format unlock date for display
@@ -77,8 +129,14 @@ export default function EditSecret() {
         return
       }
 
-      if (status.unlock_at) {
+      if (status.status === 'expired') {
+        setState({ type: 'expired' })
+        return
+      }
+
+      if (status.unlock_at && status.expires_at) {
         const unlockAt = new Date(status.unlock_at)
+        const expiresAt = new Date(status.expires_at)
 
         // Check if already unlocked
         if (unlockAt <= new Date()) {
@@ -86,7 +144,7 @@ export default function EditSecret() {
           return
         }
 
-        setState({ type: 'loaded', currentUnlockAt: unlockAt })
+        setState({ type: 'loaded', currentUnlockAt: unlockAt, currentExpiresAt: expiresAt })
       }
     } catch {
       setState({ type: 'error', message: 'Failed to load secret status' })
@@ -105,11 +163,20 @@ export default function EditSecret() {
     if (!params.token || state.type !== 'loaded') return
 
     const newUnlockAt = getNewUnlockDate(state.currentUnlockAt)
+    const newExpiresAt = getNewExpiryDate(state.currentExpiresAt)
 
     if (!newUnlockAt) {
       setState({
         type: 'error',
         message: 'Please select an unlock date',
+      })
+      return
+    }
+
+    if (!newExpiresAt) {
+      setState({
+        type: 'error',
+        message: 'Please select an expiry date',
       })
       return
     }
@@ -122,15 +189,22 @@ export default function EditSecret() {
       return
     }
 
+    // Validate expiry constraints
+    const expiryError = validateExpiryDate(newUnlockAt, newExpiresAt)
+    if (expiryError) {
+      setState({ type: 'error', message: expiryError })
+      return
+    }
+
     setState({ type: 'saving' })
 
     try {
-      await extendUnlockDate(params.token, newUnlockAt.toISOString())
-      setState({ type: 'saved', newUnlockAt })
+      await updateSecretDates(params.token, newUnlockAt.toISOString(), newExpiresAt.toISOString())
+      setState({ type: 'saved', newUnlockAt, newExpiresAt })
     } catch (err) {
       setState({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Failed to update unlock date',
+        message: err instanceof Error ? err.message : 'Failed to update dates',
       })
     }
   }
@@ -179,11 +253,20 @@ export default function EditSecret() {
     )
   }
 
+  if (state.type === 'expired') {
+    return (
+      <div className="edit-secret">
+        <h1>Secret Expired</h1>
+        <p>This secret has expired and is no longer available.</p>
+      </div>
+    )
+  }
+
   if (state.type === 'saving') {
     return (
       <div className="edit-secret">
         <h1>Updating...</h1>
-        <div className="loading">Saving new unlock date...</div>
+        <div className="loading">Saving new dates...</div>
       </div>
     )
   }
@@ -191,14 +274,18 @@ export default function EditSecret() {
   if (state.type === 'saved') {
     return (
       <div className="edit-secret">
-        <h1>Unlock Date Updated</h1>
+        <h1>Dates Updated</h1>
         <div className="success-message">
-          <p>
-            The unlock date has been extended to{' '}
-            <strong>
-              {state.newUnlockAt.toLocaleDateString()} at {state.newUnlockAt.toLocaleTimeString()}
-            </strong>
-          </p>
+          <div className="dates-info">
+            <p>
+              <strong>New unlock date:</strong> {state.newUnlockAt.toLocaleDateString()} at{' '}
+              {state.newUnlockAt.toLocaleTimeString()}
+            </p>
+            <p>
+              <strong>New expiry date:</strong> {state.newExpiresAt.toLocaleDateString()} at{' '}
+              {state.newExpiresAt.toLocaleTimeString()}
+            </p>
+          </div>
         </div>
       </div>
     )
@@ -220,11 +307,16 @@ export default function EditSecret() {
   const newUnlockDate = getNewUnlockDate(state.currentUnlockAt)
   const newUnlockDisplay = formatUnlockDate(newUnlockDate)
   const currentUnlockDisplay = formatUnlockDate(state.currentUnlockAt)
-  const isValid = datePreset !== 'custom' || (customDate && customTime)
+  const newExpiryDate = getNewExpiryDate(state.currentExpiresAt)
+  const newExpiryDisplay = formatUnlockDate(newExpiryDate)
+  const currentExpiryDisplay = formatUnlockDate(state.currentExpiresAt)
+  const isValid =
+    (datePreset !== 'custom' || (customDate && customTime)) &&
+    (expiryPreset !== 'custom' || (customExpiryDate && customExpiryTime))
 
   return (
     <div className="edit-secret">
-      <h1>Extend Unlock Date</h1>
+      <h1>Edit Secret Dates</h1>
 
       <div className="current-info">
         <p>
@@ -233,9 +325,16 @@ export default function EditSecret() {
             {currentUnlockDisplay?.date} at {currentUnlockDisplay?.time}
           </strong>
         </p>
+        <p>
+          Currently expires:{' '}
+          <strong>
+            {currentExpiryDisplay?.date} at {currentExpiryDisplay?.time}
+          </strong>
+        </p>
       </div>
 
       <form onSubmit={handleSubmit}>
+        <h3>Extend Unlock Date</h3>
         <div className="date-presets">
           <span className="presets-label">Extend by:</span>
           <button
@@ -302,8 +401,82 @@ export default function EditSecret() {
           <p className="field-hint">Select a date to continue</p>
         )}
 
+        <h3>Extend Expiry Date</h3>
+        <div className="date-presets">
+          <span className="presets-label">Extend by:</span>
+          <button
+            type="button"
+            className={expiryPreset === '+1w' ? 'active' : ''}
+            onClick={() => setExpiryPreset('+1w')}
+          >
+            +1 Week
+          </button>
+          <button
+            type="button"
+            className={expiryPreset === '+1m' ? 'active' : ''}
+            onClick={() => setExpiryPreset('+1m')}
+          >
+            +1 Month
+          </button>
+          <button
+            type="button"
+            className={expiryPreset === '+1y' ? 'active' : ''}
+            onClick={() => setExpiryPreset('+1y')}
+          >
+            +1 Year
+          </button>
+          <button
+            type="button"
+            className={expiryPreset === 'never' ? 'active' : ''}
+            onClick={() => setExpiryPreset('never')}
+          >
+            Never
+          </button>
+          <button
+            type="button"
+            className={expiryPreset === 'custom' ? 'active' : ''}
+            onClick={() => setExpiryPreset('custom')}
+          >
+            Custom
+          </button>
+        </div>
+
+        {newExpiryDisplay && (
+          <p className="unlock-preview">
+            New expiry: {newExpiryDisplay.date} at {newExpiryDisplay.time}
+          </p>
+        )}
+
+        {expiryPreset === 'custom' && (
+          <div className="custom-date-row">
+            <div className="form-group">
+              <label htmlFor="custom-expiry-date">Date</label>
+              <input
+                type="date"
+                id="custom-expiry-date"
+                value={customExpiryDate}
+                onChange={(e) => setCustomExpiryDate(e.target.value)}
+                min={state.currentExpiresAt.toISOString().split('T')[0]}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="custom-expiry-time">Time</label>
+              <input
+                type="time"
+                id="custom-expiry-time"
+                value={customExpiryTime}
+                onChange={(e) => setCustomExpiryTime(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+        {expiryPreset === 'custom' && !customExpiryDate && (
+          <p className="field-hint">Select an expiry date to continue</p>
+        )}
+
         <button type="submit" className="button primary full-width" disabled={!isValid}>
-          Update Unlock Date
+          Update Dates
         </button>
       </form>
     </div>
