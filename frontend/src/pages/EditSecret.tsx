@@ -427,7 +427,11 @@ export default function EditSecret() {
           </button>
         </div>
 
-        {newExpiryDisplay && <p className="unlock-preview">New expiry: {newExpiryDisplay.date}</p>}
+        {newExpiryDisplay && (
+          <p className="unlock-preview">
+            New expiry: {newExpiryDisplay.date} at {newExpiryDisplay.time}
+          </p>
+        )}
 
         {expiryPreset === 'custom' && (
           <div className="custom-date-row">

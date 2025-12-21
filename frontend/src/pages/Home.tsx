@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { generateSecret, base64ToBytes } from '../services/crypto'
 import { requestChallenge, createSecret } from '../services/api'
 import { solveChallenge } from '../services/pow'
@@ -22,12 +22,22 @@ export default function Home() {
   const [copied, setCopied] = useState<'edit' | 'view' | null>(null)
 
   // Expiry date state
-  const [showExpiryOptions, setShowExpiryOptions] = useState(false)
   const [expiryPreset, setExpiryPreset] = useState<ExpiryPreset>('1y')
   const [customExpiryDate, setCustomExpiryDate] = useState('')
   const [customExpiryTime, setCustomExpiryTime] = useState('00:00')
   const [createdUnlockAt, setCreatedUnlockAt] = useState<Date | null>(null)
   const [createdExpiresAt, setCreatedExpiresAt] = useState<Date | null>(null)
+
+  // Tick state to trigger re-renders for live time updates
+  const [, setTick] = useState(0)
+
+  useEffect(() => {
+    // Only tick when using non-custom presets (they depend on current time)
+    if (datePreset !== 'custom' || expiryPreset !== 'custom') {
+      const interval = setInterval(() => setTick((t) => t + 1), 1000)
+      return () => clearInterval(interval)
+    }
+  }, [datePreset, expiryPreset])
 
   // Calculate minimum date (5 minutes from now)
   const now = new Date()
@@ -97,7 +107,7 @@ export default function Home() {
   const isValid =
     message.trim() &&
     (datePreset !== 'custom' || (customDate && customTime)) &&
-    (!showExpiryOptions || expiryPreset !== 'custom' || (customExpiryDate && customExpiryTime))
+    (expiryPreset !== 'custom' || (customExpiryDate && customExpiryTime))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -188,7 +198,6 @@ export default function Home() {
     setDatePreset('1m')
     setCustomDate('')
     setCustomTime('00:00')
-    setShowExpiryOptions(false)
     setExpiryPreset('1y')
     setCustomExpiryDate('')
     setCustomExpiryTime('00:00')
@@ -400,92 +409,71 @@ export default function Home() {
             <p className="field-hint">Select a date to continue</p>
           )}
 
-          {/* Expiry options toggle */}
-          <button
-            type="button"
-            className="expiry-toggle"
-            onClick={() => setShowExpiryOptions(!showExpiryOptions)}
-          >
-            {showExpiryOptions ? 'Hide expiry options' : 'Customize expiry date'}
-            <span className={`toggle-arrow ${showExpiryOptions ? 'expanded' : ''}`}>&#9662;</span>
-          </button>
+          <div className="date-presets">
+            <span className="presets-label">Expire in:</span>
+            <button
+              type="button"
+              className={expiryPreset === '1w' ? 'active' : ''}
+              onClick={() => setExpiryPreset('1w')}
+            >
+              +1 Week
+            </button>
+            <button
+              type="button"
+              className={expiryPreset === '1m' ? 'active' : ''}
+              onClick={() => setExpiryPreset('1m')}
+            >
+              +1 Month
+            </button>
+            <button
+              type="button"
+              className={expiryPreset === '1y' ? 'active' : ''}
+              onClick={() => setExpiryPreset('1y')}
+            >
+              +1 Year
+            </button>
+            <button
+              type="button"
+              className={expiryPreset === 'custom' ? 'active' : ''}
+              onClick={() => setExpiryPreset('custom')}
+            >
+              Custom
+            </button>
+          </div>
 
-          {showExpiryOptions && (
-            <div className="expiry-section">
-              <div className="date-presets">
-                <span className="presets-label">Expire in:</span>
-                <button
-                  type="button"
-                  className={expiryPreset === '1w' ? 'active' : ''}
-                  onClick={() => setExpiryPreset('1w')}
-                >
-                  +1 Week
-                </button>
-                <button
-                  type="button"
-                  className={expiryPreset === '1m' ? 'active' : ''}
-                  onClick={() => setExpiryPreset('1m')}
-                >
-                  +1 Month
-                </button>
-                <button
-                  type="button"
-                  className={expiryPreset === '1y' ? 'active' : ''}
-                  onClick={() => setExpiryPreset('1y')}
-                >
-                  +1 Year
-                </button>
-                <button
-                  type="button"
-                  className={expiryPreset === 'custom' ? 'active' : ''}
-                  onClick={() => setExpiryPreset('custom')}
-                >
-                  Custom
-                </button>
+          {getUnlockDate() && getExpiryDate(getUnlockDate()!) && (
+            <p className="unlock-preview">
+              Expires: {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date} at{' '}
+              {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.time}
+            </p>
+          )}
+
+          {expiryPreset === 'custom' && (
+            <div className="custom-date-row">
+              <div className="form-group">
+                <label htmlFor="custom-expiry-date">Date</label>
+                <input
+                  type="date"
+                  id="custom-expiry-date"
+                  value={customExpiryDate}
+                  onChange={(e) => setCustomExpiryDate(e.target.value)}
+                  min={getUnlockDate()?.toISOString().split('T')[0] || minDateStr}
+                />
               </div>
-
-              {getUnlockDate() && getExpiryDate(getUnlockDate()!) && (
-                <p className="unlock-preview">
-                  Expires: {formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date}
-                </p>
-              )}
-
-              {expiryPreset === 'custom' && (
-                <div className="custom-date-row">
-                  <div className="form-group">
-                    <label htmlFor="custom-expiry-date">Date</label>
-                    <input
-                      type="date"
-                      id="custom-expiry-date"
-                      value={customExpiryDate}
-                      onChange={(e) => setCustomExpiryDate(e.target.value)}
-                      min={getUnlockDate()?.toISOString().split('T')[0] || minDateStr}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label htmlFor="custom-expiry-time">Time</label>
-                    <input
-                      type="time"
-                      id="custom-expiry-time"
-                      value={customExpiryTime}
-                      onChange={(e) => setCustomExpiryTime(e.target.value)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {expiryPreset === 'custom' && !customExpiryDate && (
-                <p className="field-hint">Select an expiry date to continue</p>
-              )}
+              <div className="form-group">
+                <label htmlFor="custom-expiry-time">Time</label>
+                <input
+                  type="time"
+                  id="custom-expiry-time"
+                  value={customExpiryTime}
+                  onChange={(e) => setCustomExpiryTime(e.target.value)}
+                />
+              </div>
             </div>
           )}
 
-          {/* Show default expiry when options hidden */}
-          {!showExpiryOptions && getUnlockDate() && (
-            <p className="field-hint expiry-hint">
-              Expires 1 year after unlock ({formatUnlockDate(getExpiryDate(getUnlockDate()!))?.date}
-              )
-            </p>
+          {expiryPreset === 'custom' && !customExpiryDate && (
+            <p className="field-hint">Select an expiry date to continue</p>
           )}
 
           <button
