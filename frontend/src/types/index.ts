@@ -18,6 +18,7 @@ export interface SecretCreateRequest {
   iv: string
   auth_tag: string
   unlock_at: string
+  expires_at: string
   edit_token: string
   decrypt_token: string
   pow_proof: PowProof
@@ -26,13 +27,15 @@ export interface SecretCreateRequest {
 export interface SecretCreateResponse {
   secret_id: string
   unlock_at: string
+  expires_at: string
   created_at: string
 }
 
 export interface SecretStatusResponse {
   exists: boolean
-  status: 'pending' | 'available' | 'retrieved' | 'not_found'
+  status: 'pending' | 'available' | 'retrieved' | 'expired' | 'not_found'
   unlock_at?: string
+  expires_at?: string
 }
 
 export interface SecretRetrieveResponse {

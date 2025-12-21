@@ -30,6 +30,8 @@ export default function CreateSecret() {
     try {
       // Combine date and time
       const unlockAt = new Date(`${unlockDate}T${unlockTime}:00`)
+      const expiresAt = new Date(unlockAt.getTime())
+      expiresAt.setFullYear(expiresAt.getFullYear() + 1)
 
       if (unlockAt <= new Date()) {
         throw new Error('Unlock date must be in the future')
@@ -57,6 +59,7 @@ export default function CreateSecret() {
         iv: secret.encrypted.iv,
         auth_tag: secret.encrypted.authTag,
         unlock_at: unlockAt.toISOString(),
+        expires_at: expiresAt.toISOString(),
         edit_token: secret.editToken,
         decrypt_token: secret.decryptToken,
         pow_proof: powProof,

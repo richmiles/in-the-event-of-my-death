@@ -120,19 +120,20 @@ export async function retrieveSecret(decryptToken: string): Promise<SecretRetrie
 }
 
 /**
- * Extend the unlock date of a secret.
+ * Update the unlock and expiry dates of a secret.
  */
-export async function extendUnlockDate(
+export async function updateSecretDates(
   editToken: string,
   newUnlockAt: string,
-): Promise<{ secret_id: string; unlock_at: string }> {
+  newExpiresAt: string,
+): Promise<{ secret_id: string; unlock_at: string; expires_at: string; updated_at: string }> {
   const response = await fetch(`${API_BASE}/secrets/edit`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${editToken}`,
     },
-    body: JSON.stringify({ unlock_at: newUnlockAt }),
+    body: JSON.stringify({ unlock_at: newUnlockAt, expires_at: newExpiresAt }),
   })
   return handleResponse(response)
 }

@@ -63,23 +63,29 @@ The application consists of three main components:
    ```bash
    make install
    ```
-   
+
    Or manually:
    ```bash
    # Backend
    cd backend
    poetry install
-   
+
    # Frontend
    cd frontend
    npm install
    ```
 
-3. **Run database migrations:**
+3. **Copy environment files:**
+   ```bash
+   cp frontend/.env.example frontend/.env
+   cp backend/.env.example backend/.env
+   ```
+
+4. **Run database migrations:**
    ```bash
    make migrate
    ```
-   
+
    Or manually:
    ```bash
    cd backend
@@ -120,11 +126,34 @@ make check         # Run lint, typecheck, and tests
 
 ## Configuration
 
-Create a `.env` file in the `backend/` directory for local configuration:
+### Frontend Configuration
+
+Create a `.env` file in the `frontend/` directory based on `.env.example`:
 
 ```env
-# Database
+# API Configuration
+VITE_API_URL=http://localhost:8000
+
+# Base URL for shareable links
+# In production, set this to your domain (e.g., https://ieomd.com)
+VITE_BASE_URL=http://localhost:5173
+```
+
+**Variables:**
+- `VITE_API_URL`: URL of the backend API server
+- `VITE_BASE_URL`: Base URL used for generating shareable links. In production, this should be set to your production domain
+
+### Backend Configuration
+
+Create a `.env` file in the `backend/` directory based on `.env.example`:
+
+```env
+# Database Configuration
 DATABASE_URL=sqlite:///./secrets.db
+
+# CORS Configuration
+# Comma-separated list of allowed origins
+CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
 # Security
 SECRET_KEY=your-secret-key-here
@@ -135,6 +164,13 @@ RATE_LIMIT_ENABLED=true
 # Proof of Work
 POW_DIFFICULTY=20
 ```
+
+**Variables:**
+- `DATABASE_URL`: Database connection string. Default is SQLite for development. For production, consider PostgreSQL
+- `CORS_ORIGINS`: Comma-separated list of allowed CORS origins. In production, set this to your frontend URL
+- `SECRET_KEY`: Secret key for security features
+- `RATE_LIMIT_ENABLED`: Enable/disable rate limiting
+- `POW_DIFFICULTY`: Proof-of-work difficulty level
 
 ⚠️ **Never commit `.env` files or secrets to the repository!**
 
@@ -182,12 +218,14 @@ For production deployment, you will need to:
 
 This project implements several security measures:
 
-- **Client-side encryption**: All sensitive data is encrypted in the browser before transmission
-- **Zero-knowledge architecture**: Server never has access to plaintext or decryption keys
+- **Client-side encryption**: All sensitive data is encrypted in the browser before transmission using AES-256-GCM
+- **Zero-knowledge architecture**: Server never has access to plaintext or decryption keys. Encryption keys are only included in URL fragments (which are not transmitted to the server per RFC 3986)
 - **Proof-of-work**: Prevents automated abuse and spam
 - **Rate limiting**: Protects against DoS attacks
 - **HTTPS-only**: All communications encrypted in transit
 - **Minimal retention**: Secrets deleted after retrieval or expiry
+
+For more details, see [docs/design.md](docs/design.md).
 
 ### Reporting Security Issues
 

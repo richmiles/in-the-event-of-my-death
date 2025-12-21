@@ -19,8 +19,9 @@ class Secret(Base):
     iv: Mapped[bytes] = mapped_column(LargeBinary(12), nullable=False)
     auth_tag: Mapped[bytes] = mapped_column(LargeBinary(16), nullable=False)
 
-    # Timing
+    # Timing (stored as naive datetimes in UTC, serialized with Z suffix)
     unlock_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False
     )
