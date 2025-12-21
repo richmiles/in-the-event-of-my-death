@@ -49,7 +49,7 @@ export function generateShareableLinks(
   editToken: string,
   decryptToken: string,
   encryptionKey: string,
-  baseUrl: string = window.location.origin,
+  baseUrl: string = import.meta.env.VITE_BASE_URL || window.location.origin,
 ): ShareableLinks {
   const editFragment = buildFragment({ token: editToken, key: encryptionKey })
   const viewFragment = buildFragment({ token: decryptToken, key: encryptionKey })
