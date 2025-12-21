@@ -4,86 +4,6 @@ export default function About() {
       <h1>About</h1>
       <p className="subtitle">How we keep your secrets safe.</p>
 
-      <div className="features-section">
-        <div className="features">
-          <div className="feature">
-            <div className="feature-icon" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                <circle cx="12" cy="16" r="1" />
-                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-              </svg>
-            </div>
-            <h3>Zero Knowledge</h3>
-            <p>End-to-end encrypted. We never see your content or keys.</p>
-          </div>
-
-          <div className="feature">
-            <div className="feature-icon" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-            </div>
-            <h3>Time-Locked</h3>
-            <p>Recipients can only access after the unlock date.</p>
-          </div>
-
-          <div className="feature">
-            <div className="feature-icon" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                <circle cx="12" cy="12" r="3" />
-                <line x1="1" y1="1" x2="23" y2="23" />
-              </svg>
-            </div>
-            <h3>One-Time Access</h3>
-            <p>Retrieved once, then permanently deleted.</p>
-          </div>
-
-          <div className="feature">
-            <div className="feature-icon" aria-hidden="true">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="8.5" cy="7" r="4" />
-                <line x1="20" y1="8" x2="20" y2="14" />
-                <line x1="23" y1="11" x2="17" y2="11" />
-              </svg>
-            </div>
-            <h3>No Accounts</h3>
-            <p>No sign-up. Just create and share.</p>
-          </div>
-        </div>
-      </div>
-
       <section id="how-it-works" className="info-section">
         <h2>How It Works</h2>
         <ol>
@@ -94,8 +14,55 @@ export default function About() {
         </ol>
       </section>
 
+      <section id="security-privacy" className="info-section">
+        <h2>Security &amp; Privacy</h2>
+        <ul>
+          <li>
+            <strong>Zero Knowledge:</strong> End-to-end encrypted. We never see your content or
+            keys.
+          </li>
+          <li>
+            <strong>Time-Locked:</strong> Recipients can only access after the unlock date.
+          </li>
+          <li>
+            <strong>One-Time Access:</strong> Retrieved once, then permanently deleted.
+          </li>
+          <li>
+            <strong>No Accounts:</strong> No sign-up. Just create and share.
+          </li>
+        </ul>
+      </section>
+
+      <section id="faq" className="info-section">
+        <h2>FAQ</h2>
+        <div className="faq-item">
+          <h3>Can you read my messages?</h3>
+          <p>
+            No. Your messages are encrypted in your browser before they reach our servers. The
+            encryption key is stored only in the URL fragment (the part after the #), which is never
+            sent to the server. This means we have no way to decrypt your data.
+          </p>
+        </div>
+        <div className="faq-item">
+          <h3>What happens if I lose the link?</h3>
+          <p>
+            Unfortunately, the link cannot be recovered. Since the encryption key is stored only in
+            the URL, losing the link means the secret is permanently inaccessible. We recommend
+            saving both the view link and edit link in a secure location.
+          </p>
+        </div>
+        <div className="faq-item">
+          <h3>What if I don&apos;t retrieve my secret before it expires?</h3>
+          <p>
+            Secrets expire after 90 days from creation. If a secret is not retrieved before
+            expiration, it is permanently deleted from our servers and cannot be recovered. Use the
+            edit link to extend the unlock date if needed.
+          </p>
+        </div>
+      </section>
+
       <section id="encryption" className="info-section">
-        <h2>Encryption Details</h2>
+        <h2>Technical Details</h2>
         <p>
           Your secrets are encrypted using AES-256-GCM in your browser before being sent to our
           servers. The encryption key is stored only in the URL fragment, which is never sent to the
