@@ -2,16 +2,12 @@
 
 import base64
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 
 from app.services.secret_service import create_secret, delete_expired_secrets
-
-
-def utcnow():
-    """Get current UTC time as naive datetime."""
-    return datetime.now(UTC).replace(tzinfo=None)
+from tests.test_utils import utcnow
 
 
 @pytest.fixture

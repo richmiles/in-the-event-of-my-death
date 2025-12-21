@@ -3,12 +3,9 @@
 import base64
 import hashlib
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
-
-def utcnow():
-    """Get current UTC time as naive datetime."""
-    return datetime.now(UTC).replace(tzinfo=None)
+from tests.test_utils import utcnow
 
 
 def generate_test_data():
