@@ -9,6 +9,7 @@ import {
   formatDateForDisplay,
   type DatePreset,
 } from '../utils/dates'
+import { CollapsibleDateControl } from '../components/CollapsibleDateControl'
 import type { ShareableLinks } from '../types'
 
 type Step = 'input' | 'processing' | 'done'
@@ -267,7 +268,8 @@ export default function Home() {
     )
   }
 
-  const unlockDateDisplay = formatDateForDisplay(getUnlockDate())
+  const unlockDate = getUnlockDate()
+  const expiryDate = unlockDate ? getExpiryDate(unlockDate) : null
 
   return (
     <div className="home">
@@ -286,139 +288,6 @@ export default function Home() {
             />
           </div>
 
-          <div className="date-presets">
-            <span className="presets-label">Unlock in:</span>
-            <button
-              type="button"
-              className={datePreset === '1w' ? 'active' : ''}
-              onClick={() => setDatePreset('1w')}
-            >
-              1 Week
-            </button>
-            <button
-              type="button"
-              className={datePreset === '1m' ? 'active' : ''}
-              onClick={() => setDatePreset('1m')}
-            >
-              1 Month
-            </button>
-            <button
-              type="button"
-              className={datePreset === '1y' ? 'active' : ''}
-              onClick={() => setDatePreset('1y')}
-            >
-              1 Year
-            </button>
-            <button
-              type="button"
-              className={datePreset === 'custom' ? 'active' : ''}
-              onClick={() => setDatePreset('custom')}
-            >
-              Custom
-            </button>
-          </div>
-
-          {unlockDateDisplay && (
-            <p className="unlock-preview">
-              Unlocks: {unlockDateDisplay.date} at {unlockDateDisplay.time}
-            </p>
-          )}
-
-          {datePreset === 'custom' && (
-            <div className="custom-date-row">
-              <div className="form-group">
-                <label htmlFor="custom-date">Date</label>
-                <input
-                  type="date"
-                  id="custom-date"
-                  value={customDate}
-                  onChange={(e) => setCustomDate(e.target.value)}
-                  min={minDateStr}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="custom-time">Time</label>
-                <input
-                  type="time"
-                  id="custom-time"
-                  value={customTime}
-                  onChange={(e) => setCustomTime(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-
-          {datePreset === 'custom' && !customDate && (
-            <p className="field-hint">Select a date to continue</p>
-          )}
-
-          <div className="date-presets">
-            <span className="presets-label">Expire in:</span>
-            <button
-              type="button"
-              className={expiryPreset === '1w' ? 'active' : ''}
-              onClick={() => setExpiryPreset('1w')}
-            >
-              +1 Week
-            </button>
-            <button
-              type="button"
-              className={expiryPreset === '1m' ? 'active' : ''}
-              onClick={() => setExpiryPreset('1m')}
-            >
-              +1 Month
-            </button>
-            <button
-              type="button"
-              className={expiryPreset === '1y' ? 'active' : ''}
-              onClick={() => setExpiryPreset('1y')}
-            >
-              +1 Year
-            </button>
-            <button
-              type="button"
-              className={expiryPreset === 'custom' ? 'active' : ''}
-              onClick={() => setExpiryPreset('custom')}
-            >
-              Custom
-            </button>
-          </div>
-
-          {getUnlockDate() && getExpiryDate(getUnlockDate()!) && (
-            <p className="unlock-preview">
-              Expires: {formatDateForDisplay(getExpiryDate(getUnlockDate()!))?.date} at{' '}
-              {formatDateForDisplay(getExpiryDate(getUnlockDate()!))?.time}
-            </p>
-          )}
-
-          {expiryPreset === 'custom' && (
-            <div className="custom-date-row">
-              <div className="form-group">
-                <label htmlFor="custom-expiry-date">Date</label>
-                <input
-                  type="date"
-                  id="custom-expiry-date"
-                  value={customExpiryDate}
-                  onChange={(e) => setCustomExpiryDate(e.target.value)}
-                  min={getUnlockDate()?.toISOString().split('T')[0] || minDateStr}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="custom-expiry-time">Time</label>
-                <input
-                  type="time"
-                  id="custom-expiry-time"
-                  value={customExpiryTime}
-                  onChange={(e) => setCustomExpiryTime(e.target.value)}
-                />
-              </div>
-            </div>
-          )}
-
-          {expiryPreset === 'custom' && !customExpiryDate && (
-            <p className="field-hint">Select an expiry date to continue</p>
-          )}
-
           <button
             type="submit"
             className="button primary full-width send-button"
@@ -426,6 +295,46 @@ export default function Home() {
           >
             Send
           </button>
+
+          <CollapsibleDateControl
+            id="unlock"
+            label="Unlocks"
+            displayValue={formatDateForDisplay(unlockDate)}
+            presets={[
+              { value: '1w', label: '1 Week' },
+              { value: '1m', label: '1 Month' },
+              { value: '1y', label: '1 Year' },
+              { value: 'custom', label: 'Custom' },
+            ]}
+            activePreset={datePreset}
+            onPresetChange={(p) => setDatePreset(p as DatePreset)}
+            customDate={customDate}
+            customTime={customTime}
+            onCustomDateChange={setCustomDate}
+            onCustomTimeChange={setCustomTime}
+            minDate={minDateStr}
+            customHint="Select a date to continue"
+          />
+
+          <CollapsibleDateControl
+            id="expiry"
+            label="Expires"
+            displayValue={formatDateForDisplay(expiryDate)}
+            presets={[
+              { value: '1w', label: '+1 Week' },
+              { value: '1m', label: '+1 Month' },
+              { value: '1y', label: '+1 Year' },
+              { value: 'custom', label: 'Custom' },
+            ]}
+            activePreset={expiryPreset}
+            onPresetChange={(p) => setExpiryPreset(p as DatePreset)}
+            customDate={customExpiryDate}
+            customTime={customExpiryTime}
+            onCustomDateChange={setCustomExpiryDate}
+            onCustomTimeChange={setCustomExpiryTime}
+            minDate={unlockDate?.toISOString().split('T')[0]}
+            customHint="Select an expiry date to continue"
+          />
 
           <p className="security-note">Encrypted in your browser. We never see your plaintext.</p>
 
