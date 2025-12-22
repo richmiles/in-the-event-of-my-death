@@ -12,6 +12,9 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app">
+        <div className="beta-badge" role="status" aria-label="Beta version">
+          BETA
+        </div>
         <main>
           <Routes>
             <Route path="/" element={<Home />} />
@@ -33,6 +36,7 @@ function App() {
               <span className="footer-separator">•</span>
               <Link to="/terms">Terms</Link>
             </p>
+            <p className="footer-version">v{__APP_VERSION__}</p>
           </div>
         </footer>
       </div>
