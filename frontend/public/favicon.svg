@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Envelope body -->
+  <!-- Top edge (full width) -->
+  <path d="M9 14 L55 14" fill="none" stroke="#a3a3a3" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Left edge -->
+  <path d="M6 17 L6 47" fill="none" stroke="#a3a3a3" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Right edge -->
+  <path d="M58 17 L58 47" fill="none" stroke="#a3a3a3" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Bottom edge -->
+  <path d="M9 50 L55 50" fill="none" stroke="#a3a3a3" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Corners -->
+  <path d="M6 47 Q6 50 9 50" fill="none" stroke="#a3a3a3" stroke-width="2.5"/>
+  <path d="M55 50 Q58 50 58 47" fill="none" stroke="#a3a3a3" stroke-width="2.5"/>
+  <path d="M6 17 Q6 14 9 14" fill="none" stroke="#a3a3a3" stroke-width="2.5"/>
+  <path d="M55 14 Q58 14 58 17" fill="none" stroke="#a3a3a3" stroke-width="2.5"/>
+
+  <!-- Envelope flap - split into two lines that stop at the circle -->
+  <path d="M6 16 L26 28" fill="none" stroke="#a3a3a3" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M58 16 L38 28" fill="none" stroke="#a3a3a3" stroke-width="2.5" stroke-linecap="round"/>
+
+  <!-- Circle (seal) -->
+  <circle cx="32" cy="32" r="6" fill="none" stroke="#a3a3a3" stroke-width="2.5"/>
+</svg>
