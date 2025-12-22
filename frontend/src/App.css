@@ -385,52 +385,90 @@ textarea::placeholder {
   margin: 0.5rem 0 0;
 }
 
-/* Expiry section styles */
-.expiry-toggle {
+/* Collapsible date control */
+.date-control-wrapper {
+  margin-top: 1.25rem;
+}
+
+.date-control-header {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 0.5rem;
-  background: none;
-  border: none;
-  color: var(--text-subtle);
-  font-size: 0.875rem;
-  cursor: pointer;
-  padding: 0.75rem 0;
-  margin-top: 0.5rem;
-  font-family: inherit;
-  transition: color 0.2s;
   width: 100%;
+  padding: 0.75rem 1rem;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
 }
 
-.expiry-toggle:hover {
-  color: var(--text-secondary);
+.date-control-header:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-secondary);
 }
 
-.toggle-arrow {
-  transition: transform 0.2s;
-  font-size: 0.75rem;
+.date-control-header:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.2);
 }
 
-.toggle-arrow.expanded {
+.date-control-label {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.date-control-value {
+  flex: 1;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.toggle-indicator {
+  display: flex;
+  align-items: center;
+  color: var(--text-subtle);
+  transition: transform 0.2s ease;
+}
+
+.toggle-indicator.expanded {
   transform: rotate(180deg);
 }
 
-.expiry-section {
-  margin-top: 0.75rem;
-  padding: 1rem;
-  background: var(--bg-muted);
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
+.collapsible-controls {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition:
+    max-height 0.25s ease-out,
+    opacity 0.2s ease-out;
 }
 
-.expiry-section .date-presets {
-  margin-bottom: 0.5rem;
+.collapsible-controls.expanded {
+  max-height: 200px;
+  opacity: 1;
+  transition:
+    max-height 0.3s ease-in,
+    opacity 0.25s ease-in 0.05s;
 }
 
-.expiry-hint {
-  text-align: center;
+.collapsible-controls .date-presets {
   margin-top: 0.75rem;
+  margin-bottom: 0;
+}
+
+.collapsible-controls .custom-date-row {
+  margin-top: 0.75rem;
+}
+
+.collapsible-controls .field-hint {
+  margin-top: 0.5rem;
 }
 
 .dates-info {
