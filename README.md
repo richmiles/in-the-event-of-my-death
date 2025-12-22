@@ -155,22 +155,25 @@ DATABASE_URL=sqlite:///./secrets.db
 # Comma-separated list of allowed origins
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
-# Security
-SECRET_KEY=your-secret-key-here
-
-# Rate Limiting
-RATE_LIMIT_ENABLED=true
-
 # Proof of Work
-POW_DIFFICULTY=20
+# Base difficulty; the service auto-adjusts per payload size
+POW_BASE_DIFFICULTY=18
+POW_CHALLENGE_TTL_SECONDS=300
+
+# Rate Limiting (per slowapi syntax)
+RATE_LIMIT_CHALLENGES=10/minute
+RATE_LIMIT_CREATES=5/minute
+RATE_LIMIT_RETRIEVES=30/minute
 ```
 
 **Variables:**
 - `DATABASE_URL`: Database connection string. Default is SQLite for development. For production, consider PostgreSQL
 - `CORS_ORIGINS`: Comma-separated list of allowed CORS origins. In production, set this to your frontend URL
-- `SECRET_KEY`: Secret key for security features
-- `RATE_LIMIT_ENABLED`: Enable/disable rate limiting
-- `POW_DIFFICULTY`: Proof-of-work difficulty level
+- `POW_BASE_DIFFICULTY`: Proof-of-work difficulty baseline; the service increases difficulty for larger payloads
+- `POW_CHALLENGE_TTL_SECONDS`: How long proof-of-work challenges remain valid
+- `RATE_LIMIT_CHALLENGES`: Rate limit for requesting proof-of-work challenges
+- `RATE_LIMIT_CREATES`: Rate limit for creating secrets
+- `RATE_LIMIT_RETRIEVES`: Rate limit for retrieving secrets
 
 ⚠️ **Never commit `.env` files or secrets to the repository!**
 
@@ -198,9 +201,11 @@ POW_DIFFICULTY=20
 ├── docs/                # Additional documentation
 │   └── design.md        # System design document
 ├── .gitignore           # Git ignore rules
+├── CONTRIBUTING.md      # Contribution guidelines
 ├── LICENSE              # MIT License
 ├── Makefile             # Development commands
-└── README.md            # This file
+├── README.md            # This file
+└── SECURITY.md          # Security policy
 ```
 
 ## Deployment
@@ -225,34 +230,23 @@ This project implements several security measures:
 - **HTTPS-only**: All communications encrypted in transit
 - **Minimal retention**: Secrets deleted after retrieval or expiry
 
-For more details, see [docs/design.md](docs/design.md).
-
-### Reporting Security Issues
-
-If you discover a security vulnerability, please open a security advisory on GitHub instead of using the public issue tracker.
+For more details, see [docs/design.md](docs/design.md) and [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+- Reporting bugs and proposing features
+- Development setup and coding standards
+- Pull request requirements
 
 ## Testing
 
-Run the test suite:
-
 ```bash
-# Backend tests
-cd backend
-poetry run pytest tests/ -v
-
-# Or use Make
-make test
+make test    # Run backend tests
+make check   # Run all checks (lint, format, typecheck, test)
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for testing requirements when submitting PRs.
 
 ## License
 
