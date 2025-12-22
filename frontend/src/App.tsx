@@ -4,6 +4,8 @@ import CreateSecret from './pages/CreateSecret'
 import ViewSecret from './pages/ViewSecret'
 import EditSecret from './pages/EditSecret'
 import About from './pages/About'
+import PrivacyPolicy from './pages/PrivacyPolicy'
+import TermsOfService from './pages/TermsOfService'
 import './App.css'
 
 function App() {
@@ -17,6 +19,8 @@ function App() {
             <Route path="/view" element={<ViewSecret />} />
             <Route path="/edit" element={<EditSecret />} />
             <Route path="/about" element={<About />} />
+            <Route path="/privacy" element={<PrivacyPolicy />} />
+            <Route path="/terms" element={<TermsOfService />} />
           </Routes>
         </main>
 
@@ -24,6 +28,10 @@ function App() {
           <div className="footer-content">
             <p className="footer-line">
               <Link to="/about">About</Link>
+              <span className="footer-separator">•</span>
+              <Link to="/privacy">Privacy</Link>
+              <span className="footer-separator">•</span>
+              <Link to="/terms">Terms</Link>
             </p>
           </div>
         </footer>
