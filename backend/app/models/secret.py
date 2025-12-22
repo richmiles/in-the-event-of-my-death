@@ -14,10 +14,10 @@ class Secret(Base):
     edit_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     decrypt_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
 
-    # Encrypted payload
-    ciphertext: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    iv: Mapped[bytes] = mapped_column(LargeBinary(12), nullable=False)
-    auth_tag: Mapped[bytes] = mapped_column(LargeBinary(16), nullable=False)
+    # Encrypted payload (nullable for cleared secrets)
+    ciphertext: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    iv: Mapped[bytes | None] = mapped_column(LargeBinary(12), nullable=True)
+    auth_tag: Mapped[bytes | None] = mapped_column(LargeBinary(16), nullable=True)
 
     # Timing (stored as naive datetimes in UTC, serialized with Z suffix)
     unlock_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
@@ -26,6 +26,7 @@ class Secret(Base):
         DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False
     )
     retrieved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     # Metadata
     ciphertext_size: Mapped[int] = mapped_column(Integer, nullable=False)

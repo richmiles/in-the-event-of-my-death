@@ -177,34 +177,42 @@ def get_secret_status(db: Session, secret: Secret) -> dict:
     }
 
 
-def hard_delete_retrieved_secrets(db: Session) -> int:
+def clear_expired_secrets(db: Session) -> int:
     """
-    Hard delete all secrets that have been retrieved.
+    Clear secrets' ciphertext while preserving metadata for analytics.
 
-    Returns the count of deleted rows.
+    Clears secrets that are either:
+    - Expired (expires_at <= now), OR
+    - Retrieved (retrieved_at IS NOT NULL)
+
+    And haven't been cleared yet (cleared_at IS NULL).
+
+    Sets ciphertext/iv/auth_tag to None and cleared_at to current time.
+    Rows are never deleted - metadata is preserved for analytics.
+
+    Returns the count of cleared secrets.
     """
-    result = db.query(Secret).filter(Secret.is_deleted == True).delete()  # noqa: E712
-    db.commit()
-    return result
+    from sqlalchemy import or_
 
-
-def delete_expired_secrets(db: Session) -> int:
-    """
-    Mark expired secrets as deleted.
-
-    Secrets with expires_at < now and retrieved_at IS NULL are marked as deleted.
-    Returns the count of marked rows.
-    """
     now = datetime.now(UTC).replace(tzinfo=None)
 
     result = (
         db.query(Secret)
         .filter(
-            Secret.expires_at <= now,
-            Secret.retrieved_at == None,  # noqa: E711
-            Secret.is_deleted == False,  # noqa: E712
+            Secret.cleared_at == None,  # noqa: E711 - Not already cleared
+            or_(
+                Secret.expires_at <= now,  # Expired
+                Secret.retrieved_at != None,  # noqa: E711 - Retrieved
+            ),
         )
-        .update({"is_deleted": True})
+        .update(
+            {
+                "ciphertext": None,
+                "iv": None,
+                "auth_tag": None,
+                "cleared_at": now,
+            }
+        )
     )
     db.commit()
     return result

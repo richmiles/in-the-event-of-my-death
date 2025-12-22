@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     rate_limit_creates: str = "5/minute"
     rate_limit_retrieves: str = "30/minute"
 
+    # Cleanup Scheduler
+    cleanup_interval_hours: int = 1
+
     # CORS
     # Can be set as comma-separated string via environment variable
     # e.g., CORS_ORIGINS="https://ieomd.com,https://www.ieomd.com"
