@@ -629,6 +629,10 @@ textarea::placeholder {
   line-height: 1.7;
 }
 
+.info-section p + p {
+  margin-top: 1rem;
+}
+
 /* Create secret page */
 .create-secret {
   background: var(--bg-secondary);

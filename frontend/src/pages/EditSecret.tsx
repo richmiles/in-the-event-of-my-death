@@ -26,6 +26,10 @@ function getInitialParams(): { token: string | null } {
 }
 
 export default function EditSecret() {
+  useEffect(() => {
+    document.title = 'Edit Secret | In The Event Of My Death'
+  }, [])
+
   const [params] = useState(getInitialParams)
   const [state, setState] = useState<State>(() =>
     params.token ? { type: 'loading' } : { type: 'missing_params' },
