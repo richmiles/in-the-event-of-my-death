@@ -34,6 +34,7 @@ dev:
 
 test:
 	cd backend && poetry run pytest tests/ -v
+	cd frontend && npm run test -- --run
 
 lint:
 	cd backend && poetry run ruff check .
