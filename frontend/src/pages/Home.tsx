@@ -36,6 +36,10 @@ export default function Home() {
   const [, setTick] = useState(0)
 
   useEffect(() => {
+    document.title = 'In The Event Of My Death'
+  }, [])
+
+  useEffect(() => {
     // Only tick when on input step and using non-custom presets (they depend on current time)
     if (step === 'input' && (datePreset !== 'custom' || expiryPreset !== 'custom')) {
       const interval = setInterval(() => setTick((t) => t + 1), 1000)

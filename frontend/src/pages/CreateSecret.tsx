@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { generateSecret, base64ToBytes } from '../services/crypto'
 import { requestChallenge, createSecret } from '../services/api'
 import { solveChallenge } from '../services/pow'
@@ -8,6 +8,10 @@ import type { ShareableLinks } from '../types'
 type Step = 'input' | 'processing' | 'done'
 
 export default function CreateSecret() {
+  useEffect(() => {
+    document.title = 'Create Secret | In The Event Of My Death'
+  }, [])
+
   const [step, setStep] = useState<Step>('input')
   const [message, setMessage] = useState('')
   const [unlockDate, setUnlockDate] = useState('')

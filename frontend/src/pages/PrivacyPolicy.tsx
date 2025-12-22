@@ -1,4 +1,10 @@
+import { useEffect } from 'react'
+
 export default function PrivacyPolicy() {
+  useEffect(() => {
+    document.title = 'Privacy Policy | In The Event Of My Death'
+  }, [])
+
   return (
     <div className="about">
       <h1>Privacy Policy</h1>
@@ -7,11 +13,10 @@ export default function PrivacyPolicy() {
       <section className="info-section">
         <h2>Zero-Knowledge Architecture</h2>
         <p>
-          InTheEventOfMyDeath.com is built with privacy at its core. We use a zero-knowledge
-          architecture, which means we <strong>cannot</strong> read your secrets—even if we wanted
-          to.
+          This service is built with privacy at its core. We use a zero-knowledge architecture,
+          which means we <strong>cannot</strong> read your secrets—even if we wanted to.
         </p>
-        <p style={{ marginTop: '1rem' }}>
+        <p>
           All encryption and decryption happens entirely in your browser. The encryption key is
           stored only in the URL fragment (the part after the #), which is never sent to our
           servers. This means your secret remains private between you and whoever has the complete
@@ -90,12 +95,12 @@ export default function PrivacyPolicy() {
       <section className="info-section">
         <h2>Security</h2>
         <p>
-          We take security seriously. Our infrastructure uses industry-standard security practices to
-          protect the encrypted data we store. However, since we use zero-knowledge encryption, even
-          if our servers were compromised, your secrets would remain protected as long as you keep
-          your links private.
+          We take security seriously. Our infrastructure uses industry-standard security practices
+          to protect the encrypted data we store. However, since we use zero-knowledge encryption,
+          even if our servers were compromised, your secrets would remain protected as long as you
+          keep your links private.
         </p>
-        <p style={{ marginTop: '1rem' }}>
+        <p>
           <strong>Your responsibility:</strong> The security of your secret depends on keeping the
           view and edit links private. Anyone with the complete link can access your secret once
           it&apos;s unlocked. Treat these links like passwords.

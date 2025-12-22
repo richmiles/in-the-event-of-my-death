@@ -1,4 +1,10 @@
+import { useEffect } from 'react'
+
 export default function TermsOfService() {
+  useEffect(() => {
+    document.title = 'Terms of Service | In The Event Of My Death'
+  }, [])
+
   return (
     <div className="about">
       <h1>Terms of Service</h1>
@@ -7,11 +13,11 @@ export default function TermsOfService() {
       <section className="info-section">
         <h2>Beta Service Disclaimer</h2>
         <p>
-          <strong>This service is currently in beta.</strong> InTheEventOfMyDeath.com is provided
-          on an &quot;as-is&quot; and &quot;as-available&quot; basis. We make no guarantees about
-          the service&apos;s availability, reliability, or suitability for any particular purpose.
+          <strong>This service is currently in beta.</strong> This service is provided on an
+          &quot;as-is&quot; and &quot;as-available&quot; basis. We make no guarantees about the
+          service&apos;s availability, reliability, or suitability for any particular purpose.
         </p>
-        <p style={{ marginTop: '1rem' }}>
+        <p>
           While we strive to provide a secure and reliable service, we cannot guarantee that the
           service will be uninterrupted, timely, secure, or error-free. Use this service at your own
           risk.
@@ -21,8 +27,8 @@ export default function TermsOfService() {
       <section className="info-section">
         <h2>Acceptance of Terms</h2>
         <p>
-          By accessing and using InTheEventOfMyDeath.com, you accept and agree to be bound by these
-          Terms of Service. If you do not agree to these terms, please do not use the service.
+          By accessing and using this service, you accept and agree to be bound by these Terms of
+          Service. If you do not agree to these terms, please do not use the service.
         </p>
       </section>
 
@@ -30,15 +36,21 @@ export default function TermsOfService() {
         <h2>Acceptable Use</h2>
         <p>You agree to use this service only for lawful purposes. You must not:</p>
         <ul>
-          <li>Upload, store, or share any content that is illegal, harmful, or infringes on the rights of others</li>
+          <li>
+            Upload, store, or share any content that is illegal, harmful, or infringes on the rights
+            of others
+          </li>
           <li>Use the service to store or distribute malware, viruses, or other malicious code</li>
           <li>Attempt to circumvent security measures or abuse proof-of-work challenges</li>
           <li>Use the service to harass, threaten, or harm others</li>
           <li>Violate any applicable laws or regulations</li>
-          <li>Store content that violates intellectual property rights, including copyrighted material you do not own</li>
+          <li>
+            Store content that violates intellectual property rights, including copyrighted material
+            you do not own
+          </li>
           <li>Use automated systems to create secrets or abuse the service in any way</li>
         </ul>
-        <p style={{ marginTop: '1rem' }}>
+        <p>
           We reserve the right to remove any content that violates these terms or is otherwise
           objectionable, and to terminate access to the service for users who violate these terms.
         </p>
@@ -57,7 +69,7 @@ export default function TermsOfService() {
           <li>Legal or regulatory requirements</li>
           <li>Business reasons</li>
         </ul>
-        <p style={{ marginTop: '1rem' }}>
+        <p>
           We are not liable for any loss or damage that may result from service interruptions or
           termination.
         </p>
@@ -70,9 +82,7 @@ export default function TermsOfService() {
           IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
           PARTICULAR PURPOSE, OR NON-INFRINGEMENT.
         </p>
-        <p style={{ marginTop: '1rem' }}>
-          We do not guarantee that:
-        </p>
+        <p>We do not guarantee that:</p>
         <ul>
           <li>The service will meet your specific requirements</li>
           <li>The service will be uninterrupted, timely, secure, or error-free</li>
@@ -91,19 +101,26 @@ export default function TermsOfService() {
         </p>
         <ul>
           <li>Your use or inability to use the service</li>
-          <li>Any unauthorized access to or use of our servers and/or any personal information stored therein</li>
+          <li>
+            Any unauthorized access to or use of our servers and/or any personal information stored
+            therein
+          </li>
           <li>Any interruption or cessation of transmission to or from the service</li>
-          <li>Any bugs, viruses, or other harmful code that may be transmitted through the service</li>
-          <li>Any errors or omissions in any content or for any loss or damage incurred as a result of the use of any content posted, emailed, transmitted, or otherwise made available through the service</li>
+          <li>
+            Any bugs, viruses, or other harmful code that may be transmitted through the service
+          </li>
+          <li>
+            Any errors or omissions in any content or for any loss or damage incurred as a result of
+            the use of any content posted, emailed, transmitted, or otherwise made available through
+            the service
+          </li>
           <li>The deletion, corruption, or failure to store any secrets or other data</li>
         </ul>
       </section>
 
       <section className="info-section">
         <h2>User Responsibility</h2>
-        <p>
-          You are solely responsible for:
-        </p>
+        <p>You are solely responsible for:</p>
         <ul>
           <li>The content of any secrets you create</li>
           <li>Keeping your view and edit links secure and private</li>
@@ -111,7 +128,7 @@ export default function TermsOfService() {
           <li>Any consequences of sharing or losing access to your links</li>
           <li>Setting appropriate unlock and expiry dates for your secrets</li>
         </ul>
-        <p style={{ marginTop: '1rem' }}>
+        <p>
           Remember: If you lose your links, we cannot recover your secrets due to our zero-knowledge
           architecture.
         </p>
@@ -129,9 +146,9 @@ export default function TermsOfService() {
       <section className="info-section">
         <h2>Indemnification</h2>
         <p>
-          You agree to indemnify and hold harmless InTheEventOfMyDeath.com, its operators,
-          contributors, and affiliates from any claims, damages, losses, liabilities, and expenses
-          (including legal fees) arising from your use of the service or violation of these terms.
+          You agree to indemnify and hold harmless the operators of this service, its contributors,
+          and affiliates from any claims, damages, losses, liabilities, and expenses (including
+          legal fees) arising from your use of the service or violation of these terms.
         </p>
       </section>
 

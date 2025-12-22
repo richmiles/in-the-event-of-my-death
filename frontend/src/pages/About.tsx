@@ -1,4 +1,10 @@
+import { useEffect } from 'react'
+
 export default function About() {
+  useEffect(() => {
+    document.title = 'About | In The Event Of My Death'
+  }, [])
+
   return (
     <div className="about">
       <h1>About</h1>
