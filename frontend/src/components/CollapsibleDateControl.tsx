@@ -50,18 +50,9 @@ export function CollapsibleDateControl({
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    switch (e.key) {
-      case 'Enter':
-      case ' ':
-        e.preventDefault()
-        setIsExpanded((prev) => !prev)
-        break
-      case 'Escape':
-        if (isExpanded) {
-          setIsExpanded(false)
-          headerRef.current?.focus()
-        }
-        break
+    if (e.key === 'Escape' && isExpanded) {
+      setIsExpanded(false)
+      headerRef.current?.focus()
     }
   }
 
@@ -147,3 +138,5 @@ export function CollapsibleDateControl({
     </div>
   )
 }
+
+CollapsibleDateControl.displayName = 'CollapsibleDateControl'
