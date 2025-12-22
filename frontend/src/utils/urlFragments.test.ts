@@ -82,7 +82,6 @@ describe('urlFragments utilities', () => {
     })
 
     it('should use default base URL from environment', () => {
-      const originalEnv = import.meta.env.VITE_BASE_URL
       vi.stubGlobal('location', { origin: 'https://default.com' })
 
       const result = generateShareableLinks('edit-token', 'decrypt-token', 'key')
@@ -95,31 +94,35 @@ describe('urlFragments utilities', () => {
   })
 
   describe('extractFromFragment', () => {
-    let originalLocation: Location
+    const originalLocation = window.location
 
     beforeEach(() => {
-      originalLocation = window.location
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window as any).location
     })
 
     afterEach(() => {
-      window.location = originalLocation
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).location = originalLocation
     })
 
     it('should extract token and key from URL fragment', () => {
-      window.location = { hash: '#token=abc123&key=def456' } as Location
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).location = { hash: '#token=abc123&key=def456' }
       const result = extractFromFragment()
       expect(result).toEqual({ token: 'abc123', key: 'def456' })
     })
 
     it('should return undefined for missing values', () => {
-      window.location = { hash: '#other=value' } as Location
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).location = { hash: '#other=value' }
       const result = extractFromFragment()
       expect(result).toEqual({ token: undefined, key: undefined })
     })
 
     it('should handle empty fragment', () => {
-      window.location = { hash: '' } as Location
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ;(window as any).location = { hash: '' }
       const result = extractFromFragment()
       expect(result).toEqual({ token: undefined, key: undefined })
     })

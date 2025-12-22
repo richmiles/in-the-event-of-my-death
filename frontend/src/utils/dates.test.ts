@@ -1,10 +1,11 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   applyDateOffset,
   validateExpiryDate,
   formatDateForDisplay,
   MIN_EXPIRY_GAP_MS,
   MAX_EXPIRY_MS,
+  type DatePreset,
 } from './dates'
 
 describe('dates utilities', () => {
@@ -57,7 +58,7 @@ describe('dates utilities', () => {
     })
 
     it('should return null for invalid preset', () => {
-      const result = applyDateOffset(baseDate, 'invalid' as any)
+      const result = applyDateOffset(baseDate, 'invalid' as DatePreset)
       expect(result).toBeNull()
     })
   })

@@ -181,13 +181,7 @@ describe('CollapsibleDateControl', () => {
   })
 
   it('should respect minDate for custom date input', () => {
-    render(
-      <CollapsibleDateControl
-        {...defaultProps}
-        activePreset="custom"
-        minDate="2025-01-01"
-      />,
-    )
+    render(<CollapsibleDateControl {...defaultProps} activePreset="custom" minDate="2025-01-01" />)
 
     // Expand
     fireEvent.click(screen.getByRole('button', { name: /Unlock Date/i }))
