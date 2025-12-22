@@ -934,6 +934,13 @@ textarea::placeholder {
     padding: 1rem;
   }
 
+  .beta-badge {
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.65rem;
+    padding: 0.25rem 0.5rem;
+  }
+
   .hero-form {
     padding: 1.25rem 1.75rem;
     max-width: 100%;

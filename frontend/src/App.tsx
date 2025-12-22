@@ -12,7 +12,9 @@ function App() {
   return (
     <BrowserRouter>
       <div className="app">
-        <div className="beta-badge">BETA</div>
+        <div className="beta-badge" role="status" aria-label="Beta version">
+          BETA
+        </div>
         <main>
           <Routes>
             <Route path="/" element={<Home />} />
