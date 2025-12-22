@@ -1,4 +1,8 @@
+# Operating System
 .DS_Store
+Thumbs.db
+
+# Environment Variables (NEVER COMMIT SECRETS)
 .env
 .env.*
 !.env.example
@@ -7,6 +11,7 @@
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
@@ -17,9 +22,11 @@ dist/
 build/
 .venv/
 venv/
+*.so
 
-# SQLite
+# Database Files (NEVER COMMIT DATABASES)
 *.db
+*.sqlite
 *.sqlite3
 
 # Node / Frontend
@@ -31,8 +38,22 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+.npm
+.yarn
 
 # Editor/IDE
 .idea/
 .vscode/
 .playwright-mcp/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs/
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
