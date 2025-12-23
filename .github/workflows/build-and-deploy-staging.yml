@@ -94,9 +94,6 @@ jobs:
           echo "${{ secrets.STAGING_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
 
       - name: Deploy (remote)
-        env:
-          BACKEND_IMAGE: ghcr.io/${{ github.repository_owner }}/in-the-event-of-my-death-backend:sha-${{ github.sha }}
-          WEB_IMAGE: ghcr.io/${{ github.repository_owner }}/in-the-event-of-my-death-web:sha-${{ github.sha }}
         run: |
           short_sha="${GITHUB_SHA::7}"
           backend="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-backend:sha-${short_sha}"

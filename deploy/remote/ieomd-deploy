@@ -15,6 +15,10 @@ deploy_dir="/opt/ieomd"
 backup_dir="/var/backups/ieomd"
 backend_image=""
 web_image=""
+state_file=""
+previous_backend_image=""
+previous_web_image=""
+backup_path=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -48,18 +52,51 @@ if [[ -z "$backend_image" || -z "$web_image" ]]; then
   exit 2
 fi
 
+state_file="$deploy_dir/.ieomd-images.env"
+
+if [[ -f "$state_file" ]]; then
+  # shellcheck source=/dev/null
+  source "$state_file"
+  previous_backend_image="${BACKEND_IMAGE:-}"
+  previous_web_image="${WEB_IMAGE:-}"
+fi
+
+rollback() {
+  trap - ERR
+  set +e
+  code="$?"
+  echo "[ieomd] deploy failed (exit $code)" >&2
+
+  if [[ -n "$backup_path" && -f "$backup_path" ]]; then
+    echo "[ieomd] restoring DB from backup $backup_path" >&2
+    cp -a "$backup_path" "$db_path"
+  fi
+
+  if [[ -n "$previous_backend_image" && -n "$previous_web_image" ]]; then
+    echo "[ieomd] attempting rollback to previous images" >&2
+    BACKEND_IMAGE="$previous_backend_image" WEB_IMAGE="$previous_web_image" docker compose up -d --remove-orphans
+  else
+    echo "[ieomd] no previous image state file found; manual rollback may be required" >&2
+  fi
+
+  exit "$code"
+}
+
+trap rollback ERR
+
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$backup_dir"
 
 cd "$deploy_dir"
 
-export BACKEND_IMAGE="$backend_image"
-export WEB_IMAGE="$web_image"
-
 echo "[ieomd] pulling images..."
-docker compose pull
+BACKEND_IMAGE="$backend_image" WEB_IMAGE="$web_image" docker compose pull
 
 db_path="${DB_PATH:-/var/lib/ieomd/secrets.db}"
+
+echo "[ieomd] stopping backend (maintenance window)..."
+docker compose stop backend || true
+
 if [[ -f "$db_path" ]]; then
   backup_path="$backup_dir/secrets.db.$timestamp"
   echo "[ieomd] backing up DB to $backup_path"
@@ -69,9 +106,14 @@ else
 fi
 
 echo "[ieomd] running migrations..."
-docker compose run --rm backend alembic upgrade head
+BACKEND_IMAGE="$backend_image" WEB_IMAGE="$web_image" docker compose run --rm backend alembic upgrade head
 
 echo "[ieomd] starting services..."
-docker compose up -d --remove-orphans
+BACKEND_IMAGE="$backend_image" WEB_IMAGE="$web_image" docker compose up -d --remove-orphans
+
+cat > "$state_file" <<EOF
+BACKEND_IMAGE=$backend_image
+WEB_IMAGE=$web_image
+EOF
 
 echo "[ieomd] done"

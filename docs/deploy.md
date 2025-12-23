@@ -55,6 +55,15 @@ You’ll need repository secrets for staging and production:
 - `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`, `PROD_SSH_KNOWN_HOSTS`
 - `PROD_SITE_HOST` (e.g. `example.com`)
 
+## GHCR image pulls
+
+The droplet must be able to pull images from GHCR:
+
+- Easiest: make the GHCR packages public.
+- If packages are private: authenticate on the droplet (one-time):
+  - Create a GitHub token with `read:packages`
+  - On the droplet: `docker login ghcr.io`
+
 ## Deployment workflows
 
 - Staging deploy runs automatically on merge to `main` (after checks and image build).
