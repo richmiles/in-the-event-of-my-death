@@ -19,13 +19,13 @@ install:
 	cd frontend && npm install
 	@make hooks
 
-backend:
+backend: migrate
 	cd backend && poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 frontend:
 	cd frontend && npm run dev
 
-dev:
+dev: migrate
 	@echo "Starting backend and frontend..."
 	@echo "Backend: http://localhost:8000"
 	@echo "Frontend: http://localhost:5173"
