@@ -212,6 +212,8 @@ RATE_LIMIT_RETRIEVES=30/minute
 
 **Note:** Deployment scripts and configuration live in a separate private repository to maintain security and separation of concerns. This public repository contains only the application code.
 
+For release/versioning and database migration policy, see `docs/versioning-and-migrations.md`.
+
 For production deployment, you will need to:
 - Set up a production database (the application uses SQLAlchemy and supports multiple database backends)
 - Configure environment variables
