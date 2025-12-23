@@ -1,0 +1,18 @@
+{
+	# Set to your email for ACME registration if desired
+	# email you@example.com
+}
+
+{$SITE_ADDRESS} {
+	encode gzip
+
+	@api path /api/* /health
+	handle @api {
+		reverse_proxy backend:8000
+	}
+
+	root * /srv
+	try_files {path} /index.html
+	file_server
+}
+

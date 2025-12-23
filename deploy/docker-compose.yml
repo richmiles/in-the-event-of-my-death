@@ -1,0 +1,25 @@
+services:
+  backend:
+    image: ${BACKEND_IMAGE:-ghcr.io/${GHCR_OWNER:-richmiles}/in-the-event-of-my-death-backend:latest}
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/secrets.db}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://$SITE_HOST}
+    volumes:
+      - ${DATA_DIR:-/var/lib/ieomd}:/data
+
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/${GHCR_OWNER:-richmiles}/in-the-event-of-my-death-web:latest}
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-$SITE_HOST}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
