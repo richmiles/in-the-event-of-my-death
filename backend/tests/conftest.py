@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.main as main_module
 from app.database import Base, get_db
 from app.main import app
 from app.middleware.rate_limit import limiter
@@ -43,8 +44,13 @@ def client(db_session):
     # Disable rate limiting for tests
     limiter.enabled = False
 
+    # Override the engine used by check_database_tables() so it checks the test database
+    original_engine = main_module.engine
+    main_module.engine = db_session.get_bind()
+
     with TestClient(app) as test_client:
         yield test_client
 
     app.dependency_overrides.clear()
     limiter.enabled = True
+    main_module.engine = original_engine
