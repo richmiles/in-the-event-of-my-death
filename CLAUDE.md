@@ -39,6 +39,23 @@
 
 ## Workflow
 
+### Before Starting Work (REQUIRED)
+**STOP: Do not write any code until these steps are complete.**
+
+1. **Verify a GitHub issue exists** for the task
+   - If no issue exists, create one: `gh issue create --title "<title>" --body "<description>"`
+   - Every change must trace back to an issue
+
+2. **Link the issue to the GitHub project**
+   - Add to project: `gh project item-add 6 --owner richmiles --url <issue-url>`
+   - Project #6 is "IEOMD Release v1.0"
+
+3. **Create a branch for the issue**
+   - Use: `gh issue develop <issue-number> --checkout`
+   - Or manually: `git checkout -b <type>/<issue-number>-short-description main`
+
+**If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
+
 ### Branch Naming
 - Feature: `feature/<issue-number>-short-description` (e.g., `feature/5-expiry-backend`)
 - Fix: `fix/<issue-number>-short-description`
