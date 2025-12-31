@@ -61,6 +61,13 @@ if [[ -f "$state_file" ]]; then
   previous_web_image="${WEB_IMAGE:-}"
 fi
 
+if [[ -f "$deploy_dir/.env" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$deploy_dir/.env"
+  set +a
+fi
+
 rollback() {
   trap - ERR
   set +e
@@ -69,6 +76,7 @@ rollback() {
 
   if [[ -n "$backup_path" && -f "$backup_path" ]]; then
     echo "[ieomd] restoring DB from backup $backup_path" >&2
+    mkdir -p "$(dirname "$db_path")"
     cp -a "$backup_path" "$db_path"
   fi
 
@@ -92,13 +100,22 @@ cd "$deploy_dir"
 echo "[ieomd] pulling images..."
 BACKEND_IMAGE="$backend_image" WEB_IMAGE="$web_image" docker compose pull
 
-db_path="${DB_PATH:-/var/lib/ieomd/secrets.db}"
+data_dir="${DATA_DIR:-/var/lib/ieomd}"
+
+if [[ -n "${DB_PATH:-}" ]]; then
+  db_path="$DB_PATH"
+elif [[ "${DATABASE_URL:-}" =~ ^sqlite:////data/(.+)$ ]]; then
+  db_path="$data_dir/${BASH_REMATCH[1]}"
+else
+  db_path="$data_dir/secrets.db"
+fi
 
 echo "[ieomd] stopping backend (maintenance window)..."
 docker compose stop backend || true
 
 if [[ -f "$db_path" ]]; then
-  backup_path="$backup_dir/secrets.db.$timestamp"
+  db_name="$(basename "$db_path")"
+  backup_path="$backup_dir/$db_name.$timestamp"
   echo "[ieomd] backing up DB to $backup_path"
   cp -a "$db_path" "$backup_path"
 else

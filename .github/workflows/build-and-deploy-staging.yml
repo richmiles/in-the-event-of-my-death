@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "18"
+          node-version: "20"
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend deps
@@ -92,19 +92,20 @@ jobs:
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           echo "${{ secrets.STAGING_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
 
       - name: Deploy (remote)
         run: |
           short_sha="${GITHUB_SHA::7}"
           backend="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-backend:sha-${short_sha}"
           web="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-web:sha-${short_sha}"
-          ssh "${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}" \
+          ssh -o BatchMode=yes -o ConnectTimeout=10 "${{ secrets.STAGING_SSH_USER }}@${{ secrets.STAGING_SSH_HOST }}" \
             "sudo /usr/local/bin/ieomd-deploy deploy --dir /opt/ieomd --backend-image ${backend} --web-image ${web}"
 
       - name: Smoke test
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS "https://${{ secrets.STAGING_SITE_HOST }}/health" | jq -e '.status == "healthy"' > /dev/null; then
+            if curl -fsS "https://${{ secrets.STAGING_SITE_HOST }}/health" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status") == "healthy" else 1)'; then
               exit 0
             fi
             sleep 2
