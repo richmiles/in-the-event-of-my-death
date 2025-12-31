@@ -10,7 +10,13 @@ import type {
   SecretRetrieveResponse,
 } from '../types'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+import { resolveApiBaseUrl } from './apiBase'
+
+const API_BASE = resolveApiBaseUrl({
+  apiUrl: import.meta.env.VITE_API_URL,
+  isDev: import.meta.env.DEV,
+  origin: window.location.origin,
+})
 
 class ApiError extends Error {
   status: number

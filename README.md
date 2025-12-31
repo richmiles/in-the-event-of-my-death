@@ -111,7 +111,7 @@ Frontend (starts on http://localhost:5173):
 make frontend
 ```
 
-The frontend will proxy API requests to the backend automatically.
+The frontend calls the backend API at `${VITE_API_URL}/api/v1` (in production it defaults to same-origin `/api/v1`).
 
 ### Development Commands
 
@@ -140,7 +140,7 @@ VITE_BASE_URL=http://localhost:5173
 ```
 
 **Variables:**
-- `VITE_API_URL`: URL of the backend API server
+- `VITE_API_URL`: Optional backend server URL (origin). The frontend calls `${VITE_API_URL}/api/v1/...`. If unset in production, it defaults to same-origin `/api/v1`.
 - `VITE_BASE_URL`: Base URL used for generating shareable links. In production, this should be set to your production domain
 
 ### Backend Configuration
