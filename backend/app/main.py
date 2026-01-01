@@ -1,7 +1,10 @@
+import secrets as secrets_module
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+import structlog
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import inspect
@@ -60,6 +63,51 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+# Exception handler to add correlation ID to all error responses
+@app.exception_handler(Exception)
+async def add_correlation_id_to_errors(request: Request, exc: Exception):
+    """
+    Catch-all exception handler that ensures X-Correlation-ID is included in error responses.
+
+    This handler preserves HTTPException status codes and details,
+    and returns 500 for all other exceptions.
+
+    The correlation ID should always be available from the LoggingMiddleware context.
+    If it's somehow missing, we generate a fallback ID and log a warning.
+    """
+    # Get correlation ID from structlog context
+    contextvars = structlog.contextvars.get_contextvars()
+    correlation_id = contextvars.get("correlation_id")
+
+    # Fallback if correlation ID is missing (shouldn't happen with proper middleware order)
+    if correlation_id is None:
+        correlation_id = secrets_module.token_hex(4)
+        logger.warning(
+            "correlation_id_missing_in_exception_handler",
+            path=request.url.path,
+            method=request.method,
+            fallback_id=correlation_id,
+        )
+
+    # Preserve HTTPException details and headers
+    if isinstance(exc, HTTPException):
+        headers = dict(exc.headers or {})
+        headers["X-Correlation-ID"] = correlation_id
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=headers,
+        )
+
+    # For all other exceptions, return 500
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+        headers={"X-Correlation-ID": correlation_id},
+    )
+
+
 # Rate limiting
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -73,7 +121,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request logging (added before CORS in middleware stack, so executes after CORS)
+# Request logging
 app.add_middleware(LoggingMiddleware)
 
 # Routers
