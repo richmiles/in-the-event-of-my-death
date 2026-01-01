@@ -186,7 +186,13 @@ async def retrieve_secret_endpoint(
         )
 
     if result["status"] == "retrieved":
-        raise HTTPException(status_code=410, detail=result["message"])
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "status": "retrieved",
+                "message": result["message"],
+            },
+        )
 
     if result["status"] == "expired":
         raise HTTPException(
