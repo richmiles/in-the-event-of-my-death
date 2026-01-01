@@ -117,7 +117,7 @@ The frontend calls the backend API at `${VITE_API_URL}/api/v1` (in production it
 
 ```bash
 make help          # Show all available commands
-make test          # Run backend tests
+make test          # Run all tests (backend + frontend)
 make lint          # Run linters for both backend and frontend
 make format        # Auto-format code
 make typecheck     # Run TypeScript type checking
