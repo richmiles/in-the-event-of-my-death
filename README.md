@@ -210,7 +210,7 @@ RATE_LIMIT_RETRIEVES=30/minute
 
 ## Deployment
 
-**Note:** Deployment scripts and configuration live in a separate private repository to maintain security and separation of concerns. This public repository contains only the application code.
+Deployment configuration lives in `deploy/` and is documented in `docs/deploy.md`.
 
 For release/versioning and database migration policy, see `docs/versioning-and-migrations.md`.
 
