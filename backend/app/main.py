@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -69,13 +69,27 @@ async def add_correlation_id_to_errors(request: Request, exc: Exception):
     """
     Catch-all exception handler that ensures X-Correlation-ID is included in error responses.
 
-    This handler re-raises HTTPExceptions to preserve their status codes and details,
+    This handler preserves HTTPException status codes and details,
     and returns 500 for all other exceptions.
-    """
-    from fastapi import HTTPException
 
+    The correlation ID should always be available from the LoggingMiddleware context.
+    If it's somehow missing, we generate a fallback ID and log a warning.
+    """
     # Get correlation ID from structlog context
-    correlation_id = structlog.contextvars.get_contextvars().get("correlation_id", "unknown")
+    contextvars = structlog.contextvars.get_contextvars()
+    correlation_id = contextvars.get("correlation_id")
+
+    # Fallback if correlation ID is missing (shouldn't happen with proper middleware order)
+    if correlation_id is None:
+        import secrets
+
+        correlation_id = secrets.token_hex(4)
+        logger.warning(
+            "correlation_id_missing_in_exception_handler",
+            path=request.url.path,
+            method=request.method,
+            fallback_id=correlation_id,
+        )
 
     # Preserve HTTPException details
     if isinstance(exc, HTTPException):
