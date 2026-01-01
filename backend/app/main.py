@@ -68,7 +68,7 @@ app = FastAPI(
 async def add_correlation_id_to_errors(request: Request, exc: Exception):
     """
     Catch-all exception handler that ensures X-Correlation-ID is included in error responses.
-    
+
     This handler re-raises HTTPExceptions to preserve their status codes and details,
     and returns 500 for all other exceptions.
     """
