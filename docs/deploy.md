@@ -32,8 +32,8 @@ Compose files live in `deploy/`.
    - `deploy/docker-compose.staging.yml` (staging only)
    - `deploy/Caddyfile` (if you want to override baked-in config)
 5. Create `/opt/ieomd/.env` with at least:
-   - `SITE_HOST=example.com`
-   - `SITE_ADDRESS=example.com, www.example.com` (Caddy site label(s))
+   - `SITE_HOST=ieomd.com`
+   - `SITE_ADDRESS=ieomd.com, www.ieomd.com` (Caddy site label(s))
    - `DATA_DIR=/var/lib/ieomd`
    - `DATABASE_URL=sqlite:////data/secrets.db`
 6. Ensure `/opt/ieomd` contains a compose override if needed.
@@ -51,9 +51,9 @@ Recommended approach:
 You’ll need repository secrets for staging and production:
 
 - `STAGING_SSH_HOST`, `STAGING_SSH_USER`, `STAGING_SSH_KEY`, `STAGING_SSH_KNOWN_HOSTS`
-- `STAGING_SITE_HOST` (e.g. `staging.example.com`)
+- `STAGING_SITE_HOST` (e.g. `staging.ieomd.com`)
 - `PROD_SSH_HOST`, `PROD_SSH_USER`, `PROD_SSH_KEY`, `PROD_SSH_KNOWN_HOSTS`
-- `PROD_SITE_HOST` (e.g. `example.com`)
+- `PROD_SITE_HOST` (e.g. `ieomd.com`)
 
 ## GHCR image pulls
 

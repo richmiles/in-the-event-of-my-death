@@ -2,7 +2,7 @@
 name = "in-the-event-of-my-death"
 version = "0.1.0-beta"
 description = "Zero-knowledge time-locked secret delivery service"
-authors = ["Your Name <you@example.com>"]
+authors = ["Rich Miles <rich@ieomd.com>"]
 package-mode = false
 
 [tool.poetry.dependencies]
