@@ -1,3 +1,4 @@
+import secrets as secrets_module
 from contextlib import asynccontextmanager
 
 import structlog
@@ -81,9 +82,7 @@ async def add_correlation_id_to_errors(request: Request, exc: Exception):
 
     # Fallback if correlation ID is missing (shouldn't happen with proper middleware order)
     if correlation_id is None:
-        import secrets
-
-        correlation_id = secrets.token_hex(4)
+        correlation_id = secrets_module.token_hex(4)
         logger.warning(
             "correlation_id_missing_in_exception_handler",
             path=request.url.path,
@@ -91,12 +90,14 @@ async def add_correlation_id_to_errors(request: Request, exc: Exception):
             fallback_id=correlation_id,
         )
 
-    # Preserve HTTPException details
+    # Preserve HTTPException details and headers
     if isinstance(exc, HTTPException):
+        headers = dict(exc.headers) if exc.headers else {}
+        headers["X-Correlation-ID"] = correlation_id
         return JSONResponse(
             status_code=exc.status_code,
             content={"detail": exc.detail},
-            headers={"X-Correlation-ID": correlation_id},
+            headers=headers,
         )
 
     # For all other exceptions, return 500
@@ -120,7 +121,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request logging (added before CORS in middleware stack, so executes after CORS)
+# Request logging
 app.add_middleware(LoggingMiddleware)
 
 # Routers
