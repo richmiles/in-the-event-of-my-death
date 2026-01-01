@@ -186,6 +186,10 @@ async def retrieve_secret_endpoint(
             },
         )
 
+    # Defense-in-depth: This branch is normally unreachable because
+    # find_secret_by_decrypt_token() excludes deleted secrets (is_deleted=True),
+    # and secrets are marked deleted immediately upon retrieval. However, we keep
+    # this check in case the lookup behavior changes or for race condition safety.
     if result["status"] == "retrieved":
         logger.warning("secret_already_retrieved", secret_id=secret.id)
         raise HTTPException(
