@@ -8,7 +8,7 @@
 
 ## Development Commands
 - `make dev` - Run both frontend and backend
-- `make test` - Run backend tests
+- `make test` - Run all tests (backend + frontend)
 - `make lint` - Lint both frontend and backend
 - `make format` - Format code
 - `make typecheck` - TypeScript type checking
