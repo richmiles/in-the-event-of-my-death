@@ -6,6 +6,13 @@ from sqlalchemy.orm import Session
 from app.models.secret import Secret
 from app.services.crypto_utils import hash_token, verify_token
 
+TOKEN_PREFIX_LENGTH = 16  # First 16 hex chars (64 bits) of token
+
+
+def get_token_prefix(token: str) -> str:
+    """Extract the prefix from a token for indexed lookup."""
+    return token[:TOKEN_PREFIX_LENGTH]
+
 
 def create_secret(
     db: Session,
@@ -21,6 +28,7 @@ def create_secret(
     Create a new secret with hashed tokens.
 
     The tokens are hashed with Argon2id before storage.
+    Token prefixes are stored for O(1) lookup.
     """
     ciphertext = base64.b64decode(ciphertext_b64)
     iv = base64.b64decode(iv_b64)
@@ -32,6 +40,8 @@ def create_secret(
         auth_tag=auth_tag,
         unlock_at=unlock_at,
         expires_at=expires_at,
+        edit_token_prefix=get_token_prefix(edit_token),
+        decrypt_token_prefix=get_token_prefix(decrypt_token),
         edit_token_hash=hash_token(edit_token),
         decrypt_token_hash=hash_token(decrypt_token),
         ciphertext_size=len(ciphertext),
@@ -45,12 +55,23 @@ def create_secret(
 
 
 def find_secret_by_edit_token(db: Session, edit_token: str) -> Secret | None:
-    """Find a secret by its edit token (verifies hash)."""
-    # We need to iterate through secrets since we can't directly query by token
-    # In production, consider adding a token prefix/identifier for faster lookup
-    secrets = db.query(Secret).filter(Secret.is_deleted == False).all()  # noqa: E712
+    """Find a secret by its edit token.
 
-    for secret in secrets:
+    Uses indexed prefix lookup for O(1) database query, then verifies
+    with Argon2 hash. Prefix collisions are extremely rare (64 bits)
+    but handled correctly by verifying the full hash.
+    """
+    prefix = get_token_prefix(edit_token)
+    candidates = (
+        db.query(Secret)
+        .filter(
+            Secret.edit_token_prefix == prefix,
+            Secret.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+
+    for secret in candidates:
         if verify_token(edit_token, secret.edit_token_hash):
             return secret
 
@@ -58,10 +79,23 @@ def find_secret_by_edit_token(db: Session, edit_token: str) -> Secret | None:
 
 
 def find_secret_by_decrypt_token(db: Session, decrypt_token: str) -> Secret | None:
-    """Find a secret by its decrypt token (verifies hash)."""
-    secrets = db.query(Secret).filter(Secret.is_deleted == False).all()  # noqa: E712
+    """Find a secret by its decrypt token.
 
-    for secret in secrets:
+    Uses indexed prefix lookup for O(1) database query, then verifies
+    with Argon2 hash. Prefix collisions are extremely rare (64 bits)
+    but handled correctly by verifying the full hash.
+    """
+    prefix = get_token_prefix(decrypt_token)
+    candidates = (
+        db.query(Secret)
+        .filter(
+            Secret.decrypt_token_prefix == prefix,
+            Secret.is_deleted == False,  # noqa: E712
+        )
+        .all()
+    )
+
+    for secret in candidates:
         if verify_token(decrypt_token, secret.decrypt_token_hash):
             return secret
 

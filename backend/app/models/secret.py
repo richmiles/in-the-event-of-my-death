@@ -11,6 +11,13 @@ class Secret(Base):
     __tablename__ = "secrets"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+
+    # Token prefixes for O(1) lookup (first 16 hex chars of token)
+    # These are indexed and used to narrow down candidates before Argon2 verification
+    edit_token_prefix: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+    decrypt_token_prefix: Mapped[str] = mapped_column(String(16), index=True, nullable=False)
+
+    # Full Argon2 hashes for secure verification after prefix lookup
     edit_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     decrypt_token_hash: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
 
