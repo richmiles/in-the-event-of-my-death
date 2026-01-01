@@ -166,7 +166,6 @@ class SecretEditResponse(BaseModel):
     secret_id: str
     unlock_at: UTCDateTime
     expires_at: UTCDateTime
-    updated_at: UTCDateTime
 
 
 class SecretStatusResponse(BaseModel):

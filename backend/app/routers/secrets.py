@@ -150,7 +150,6 @@ async def edit_secret(
         secret_id=updated_secret.id,
         unlock_at=updated_secret.unlock_at,
         expires_at=updated_secret.expires_at,
-        updated_at=updated_secret.unlock_at,  # Using unlock_at as proxy for updated_at
     )
 
 
