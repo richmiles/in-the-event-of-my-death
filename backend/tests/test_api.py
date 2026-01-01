@@ -4,7 +4,11 @@ import base64
 import hashlib
 import secrets
 from datetime import timedelta
+from unittest.mock import MagicMock
 
+from starlette.requests import Request
+
+from app.middleware.rate_limit import get_real_client_ip
 from tests.test_utils import utcnow
 
 
@@ -906,3 +910,57 @@ class TestExpiryFeature:
         data = status_response.json()
         assert "expires_at" in data
         assert data["expires_at"] is not None
+
+
+class TestRateLimitClientIP:
+    """Tests for rate limiting client IP extraction."""
+
+    def test_x_forwarded_for_single_ip(self):
+        """Test that X-Forwarded-For header is respected."""
+        request = MagicMock(spec=Request)
+        request.headers = {"X-Forwarded-For": "203.0.113.195"}
+        request.client.host = "10.0.0.1"
+
+        result = get_real_client_ip(request)
+
+        assert result == "203.0.113.195"
+
+    def test_x_forwarded_for_multiple_ips(self):
+        """Test that first IP is extracted from X-Forwarded-For chain."""
+        request = MagicMock(spec=Request)
+        request.headers = {"X-Forwarded-For": "203.0.113.195, 70.41.3.18, 150.172.238.178"}
+        request.client.host = "10.0.0.1"
+
+        result = get_real_client_ip(request)
+
+        assert result == "203.0.113.195"
+
+    def test_x_forwarded_for_with_whitespace(self):
+        """Test that whitespace is stripped from IP addresses."""
+        request = MagicMock(spec=Request)
+        request.headers = {"X-Forwarded-For": "  203.0.113.195  , 70.41.3.18"}
+        request.client.host = "10.0.0.1"
+
+        result = get_real_client_ip(request)
+
+        assert result == "203.0.113.195"
+
+    def test_fallback_to_client_host(self):
+        """Test fallback to request.client.host when no X-Forwarded-For."""
+        request = MagicMock(spec=Request)
+        request.headers = {}
+        request.client.host = "192.168.1.100"
+
+        result = get_real_client_ip(request)
+
+        assert result == "192.168.1.100"
+
+    def test_fallback_when_no_client(self):
+        """Test fallback to 'unknown' when request.client is None."""
+        request = MagicMock(spec=Request)
+        request.headers = {}
+        request.client = None
+
+        result = get_real_client_ip(request)
+
+        assert result == "unknown"
