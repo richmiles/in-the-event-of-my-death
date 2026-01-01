@@ -145,7 +145,7 @@ export async function updateSecretDates(
   editToken: string,
   newUnlockAt: string,
   newExpiresAt: string,
-): Promise<{ secret_id: string; unlock_at: string; expires_at: string; updated_at: string }> {
+): Promise<{ secret_id: string; unlock_at: string; expires_at: string }> {
   const response = await fetch(`${API_BASE}/secrets/edit`, {
     method: 'PUT',
     headers: {
