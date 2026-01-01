@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+import structlog
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import inspect
@@ -59,6 +61,37 @@ app = FastAPI(
     version="0.1.0-beta",
     lifespan=lifespan,
 )
+
+
+# Exception handler to add correlation ID to all error responses
+@app.exception_handler(Exception)
+async def add_correlation_id_to_errors(request: Request, exc: Exception):
+    """
+    Catch-all exception handler that ensures X-Correlation-ID is included in error responses.
+    
+    This handler re-raises HTTPExceptions to preserve their status codes and details,
+    and returns 500 for all other exceptions.
+    """
+    from fastapi import HTTPException
+
+    # Get correlation ID from structlog context
+    correlation_id = structlog.contextvars.get_contextvars().get("correlation_id", "unknown")
+
+    # Preserve HTTPException details
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers={"X-Correlation-ID": correlation_id},
+        )
+
+    # For all other exceptions, return 500
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+        headers={"X-Correlation-ID": correlation_id},
+    )
+
 
 # Rate limiting
 app.state.limiter = limiter
