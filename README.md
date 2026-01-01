@@ -15,7 +15,7 @@ InTheEventOfMyDeath.com enables you to:
 
 - **Client-side encryption**: All encryption/decryption happens in your browser using AES-256-GCM
 - **Time-locked delivery**: Server enforces expiry and never serves ciphertext before the scheduled time
-- **One-time access**: Ciphertext is deleted after first successful post-expiry retrieval
+- **One-time access**: Ciphertext is deleted after first successful post-unlock retrieval
 - **Abuse prevention**: Proof-of-work challenges prevent spam and automated attacks
 - **Anonymous usage**: No accounts required, minimal metadata collection
 - **Zero-knowledge storage**: Server never has access to your decryption keys or plaintext data
