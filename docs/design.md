@@ -14,7 +14,7 @@ This document outlines the functional, technical, and security design for **InTh
 - Provide a **time-locked secret** delivery service that allows users to set up messages or files to be released after a specific unlock time.
 - Maintain a **zero-knowledge** approach: the server stores only encrypted data and minimal metadata, never plaintext or decryption keys.
 - Offer two distinct access links:
-  - An **edit link** for the author to update the message or postpone its release.
+  - An **edit link** for the author to postpone the unlock or expiration dates.
   - A **decrypt link** for recipients to retrieve and decrypt the message after unlock.
 
 ### Scope
@@ -31,7 +31,7 @@ This document outlines the functional, technical, and security design for **InTh
 
 ### Primary Use Cases
 - **Create Secret:** Author submits text or a file, sets unlock and expiration times, and receives both edit and decrypt links.
-- **Update Secret:** Author uses the edit link to modify the ciphertext and/or push the unlock time forward.
+- **Update Secret:** Author uses the edit link to push the unlock and expiration times forward.
 - **Attempt Early Retrieval:** Recipient visits decrypt link before unlock and is shown the scheduled unlock time only.
 - **Retrieve Secret:** Recipient visits decrypt link after unlock and receives ciphertext for client-side decryption.
 - **One-Time Access:** Ciphertext is deleted after first successful post-unlock retrieval or upon expiration.
@@ -42,7 +42,7 @@ This document outlines the functional, technical, and security design for **InTh
 
 - **FR1:** Allow authors to submit text or files and specify unlock and expiration times.
 - **FR2:** Generate two opaque, unguessable tokens per secret: an edit token and a decrypt token.
-- **FR3:** Edit token permits updating ciphertext and/or unlock time prior to unlock.
+- **FR3:** Edit token permits updating unlock and expiration times prior to unlock.
 - **FR4:** Decrypt token permits retrieval of ciphertext only after unlock.
 - **FR5:** Server enforces unlock time and never serves ciphertext before the unlock timestamp.
 - **FR6:** Ciphertext deleted after first post-unlock retrieval or upon expiration.
