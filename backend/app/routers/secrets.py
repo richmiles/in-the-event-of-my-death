@@ -21,7 +21,6 @@ from app.services.pow_service import (
     validate_pow,
 )
 from app.services.secret_service import (
-    clear_expired_secrets,
     create_secret,
     find_secret_by_decrypt_token,
     find_secret_by_edit_token,
@@ -244,22 +243,3 @@ async def get_edit_status(
 
     status = get_secret_status(db, secret)
     return SecretStatusResponse(**status)
-
-
-@router.post("/secrets/cleanup")
-@limiter.limit("1/minute")
-async def trigger_cleanup(
-    request: Request,
-    db: Session = Depends(get_db),
-):
-    """
-    Manually trigger cleanup of expired and retrieved secrets.
-
-    Clears ciphertext/iv/auth_tag while preserving metadata for analytics.
-    Rate-limited to 1 request per minute.
-    """
-    cleared = clear_expired_secrets(db)
-
-    return {
-        "cleared": cleared,
-    }
