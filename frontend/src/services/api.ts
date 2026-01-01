@@ -114,11 +114,24 @@ export async function retrieveSecret(decryptToken: string): Promise<SecretRetrie
     }
   }
 
-  // Handle 410 (already retrieved)
+  // Handle 410 (already retrieved or expired)
   if (response.status === 410) {
+    const data = await response.json()
+    const detail = data.detail
+
+    // Check if it's an expired secret
+    if (detail?.status === 'expired') {
+      return {
+        status: 'expired',
+        expires_at: detail.expires_at,
+        message: detail.message || 'This secret has expired',
+      }
+    }
+
+    // Default to retrieved
     return {
       status: 'retrieved',
-      message: 'This secret has already been retrieved',
+      message: detail?.message || 'This secret has already been retrieved',
     }
   }
 

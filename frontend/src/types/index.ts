@@ -44,6 +44,7 @@ export interface SecretRetrieveResponse {
   iv?: string
   auth_tag?: string
   unlock_at?: string
+  expires_at?: string
   retrieved_at?: string
   message?: string
 }
