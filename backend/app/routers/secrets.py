@@ -1,6 +1,7 @@
 import base64
 import hashlib
 
+import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,7 @@ from app.services.secret_service import (
 )
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 
 def extract_bearer_token(authorization: str = Header(...)) -> str:
@@ -73,6 +75,7 @@ async def create_new_secret(
             payload_hash=secret_data.pow_proof.payload_hash,
         )
     except ValueError as e:
+        logger.warning("pow_validation_failed", error=str(e))
         raise HTTPException(status_code=400, detail=str(e))
 
     # Step 2: Verify payload hash matches actual ciphertext
@@ -83,6 +86,7 @@ async def create_new_secret(
         secret_data.auth_tag,
     )
     if computed_hash != secret_data.pow_proof.payload_hash:
+        logger.warning("payload_hash_mismatch")
         raise HTTPException(
             status_code=400,
             detail="Payload hash mismatch - ciphertext doesn't match PoW proof",
@@ -113,6 +117,13 @@ async def create_new_secret(
 
     # Step 5: Only NOW mark challenge as used (after all validations passed)
     mark_challenge_used(db, challenge)
+
+    logger.info(
+        "secret_created",
+        secret_id=secret.id,
+        ciphertext_size=secret.ciphertext_size,
+        difficulty=challenge.difficulty,
+    )
 
     return SecretCreateResponse(
         secret_id=secret.id,
@@ -146,6 +157,8 @@ async def edit_secret(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    logger.info("secret_edited", secret_id=updated_secret.id)
+
     return SecretEditResponse(
         secret_id=updated_secret.id,
         unlock_at=updated_secret.unlock_at,
@@ -175,6 +188,7 @@ async def retrieve_secret_endpoint(
     result = retrieve_secret(db, secret)
 
     if result["status"] == "pending":
+        logger.warning("secret_access_pending", secret_id=secret.id)
         raise HTTPException(
             status_code=403,
             detail={
@@ -185,6 +199,7 @@ async def retrieve_secret_endpoint(
         )
 
     if result["status"] == "retrieved":
+        logger.warning("secret_already_retrieved", secret_id=secret.id)
         raise HTTPException(
             status_code=410,
             detail={
@@ -194,6 +209,7 @@ async def retrieve_secret_endpoint(
         )
 
     if result["status"] == "expired":
+        logger.warning("secret_expired", secret_id=secret.id)
         raise HTTPException(
             status_code=410,
             detail={
@@ -203,6 +219,7 @@ async def retrieve_secret_endpoint(
             },
         )
 
+    logger.info("secret_retrieved", secret_id=secret.id)
     return SecretRetrieveResponse(**result)
 
 
