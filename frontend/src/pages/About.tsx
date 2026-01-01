@@ -34,7 +34,7 @@ export default function About() {
             <strong>Time-Locked:</strong> Recipients can only access after the unlock date.
           </li>
           <li>
-            <strong>One-Time Access:</strong> Retrieved once, then permanently deleted.
+            <strong>One-Time Access:</strong> Retrieved once, then encrypted content permanently cleared.
           </li>
           <li>
             <strong>No Accounts:</strong> No sign-up. Just create and share.
@@ -64,17 +64,17 @@ export default function About() {
           <h3>What&apos;s the difference between unlock date and expiry date?</h3>
           <p>
             The <strong>unlock date</strong> is when your recipient can first access the secret. The{' '}
-            <strong>expiry date</strong> is when the secret is permanently deleted, whether
+            <strong>expiry date</strong> is when the secret is permanently cleared, whether
             retrieved or not. You can set unlock dates up to 2 years and expiry dates up to 5 years
-            in the future. Use the edit link to adjust either date before the secret is retrieved.
+            in the future. Use the edit link to adjust either date before the secret unlocks.
           </p>
         </div>
         <div className="faq-item">
           <h3>What if I don&apos;t retrieve my secret before it expires?</h3>
           <p>
-            If a secret is not retrieved before its expiry date, it is permanently deleted from our
-            servers and cannot be recovered. Make sure the expiry date gives your recipient enough
-            time after the unlock date to retrieve the secret.
+            If a secret is not retrieved before its expiry date, its encrypted content is permanently
+            cleared from our servers and cannot be recovered. Make sure the expiry date gives your
+            recipient enough time after the unlock date to retrieve the secret.
           </p>
         </div>
       </section>

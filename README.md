@@ -1,6 +1,6 @@
 # InTheEventOfMyDeath.com
 
-A privacy-preserving, zero-knowledge time-locked secret delivery service. This service allows users to create encrypted messages or files with a configurable expiry time, distribute a decryption link to recipients, and retain an edit link to extend or modify the expiry.
+A privacy-preserving, zero-knowledge time-locked secret delivery service. This service allows users to create encrypted messages or files with configurable unlock and expiry times, distribute a decryption link to recipients, and retain an edit link to postpone the unlock or expiry dates.
 
 ## Overview
 
@@ -8,14 +8,14 @@ InTheEventOfMyDeath.com enables you to:
 - **Create time-locked secrets**: Submit text or files that will be released after a specific date/time
 - **Maintain zero-knowledge privacy**: The server stores only encrypted data, never plaintext or decryption keys
 - **Control access**: Two distinct links are generated:
-  - An **edit link** for the author to postpone the unlock or expiration dates
-  - A **decrypt link** for recipients to retrieve and decrypt the message after expiry
+  - An **edit link** for the author to postpone the unlock or expiration dates (before unlock)
+  - A **decrypt link** for recipients to retrieve and decrypt the message after unlock
 
 ## Features
 
 - **Client-side encryption**: All encryption/decryption happens in your browser using AES-256-GCM
-- **Time-locked delivery**: Server enforces expiry and never serves ciphertext before the scheduled time
-- **One-time access**: Ciphertext is deleted after first successful post-unlock retrieval
+- **Time-locked delivery**: Server enforces unlock date and never serves ciphertext before the scheduled time
+- **One-time access**: Ciphertext is cleared after first successful post-unlock retrieval (metadata retained)
 - **Abuse prevention**: Proof-of-work challenges prevent spam and automated attacks
 - **Anonymous usage**: No accounts required, minimal metadata collection
 - **Zero-knowledge storage**: Server never has access to your decryption keys or plaintext data
@@ -41,7 +41,7 @@ The application consists of three main components:
 - SQLite for local development (configured via DATABASE_URL)
 - SQLAlchemy ORM supports various production databases
 - Stores only encrypted ciphertext and minimal metadata
-- Automated cleanup of expired secrets
+- Automated clearing of ciphertext for expired or retrieved secrets (metadata retained)
 
 ## Local Setup
 
@@ -233,7 +233,7 @@ This project implements several security measures:
 - **Proof-of-work**: Prevents automated abuse and spam
 - **Rate limiting**: Protects against DoS attacks
 - **HTTPS-only**: All communications encrypted in transit
-- **Minimal retention**: Secrets deleted after retrieval or expiry
+- **Minimal retention**: Ciphertext cleared after retrieval or expiry; metadata retained for analytics
 
 For more details, see [docs/design.md](docs/design.md) and [SECURITY.md](SECURITY.md).
 
