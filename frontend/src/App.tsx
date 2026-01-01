@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Link } from 'react-router-dom'
 import Home from './pages/Home'
-import CreateSecret from './pages/CreateSecret'
 import ViewSecret from './pages/ViewSecret'
 import EditSecret from './pages/EditSecret'
 import About from './pages/About'
@@ -18,7 +17,6 @@ function App() {
         <main>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/create" element={<CreateSecret />} />
             <Route path="/view" element={<ViewSecret />} />
             <Route path="/edit" element={<EditSecret />} />
             <Route path="/about" element={<About />} />
