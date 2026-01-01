@@ -4,7 +4,7 @@ import base64
 import hashlib
 import secrets
 import uuid
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 from starlette.requests import Request
@@ -160,7 +160,6 @@ class TestSecrets:
         # Verify created_at is a valid recent timestamp
         assert "created_at" in data
         # Parse the created_at timestamp and verify it's within last minute
-        from datetime import datetime
         created_at_dt = datetime.fromisoformat(data["created_at"].rstrip("Z"))
         time_diff = abs((utcnow() - created_at_dt).total_seconds())
         assert time_diff < 60, \
@@ -749,7 +748,6 @@ class TestExpiryFeature:
         # Verify created_at is a valid recent timestamp
         assert "created_at" in data
         # Parse the created_at timestamp and verify it's within last minute
-        from datetime import datetime
         created_at_dt = datetime.fromisoformat(data["created_at"].rstrip("Z"))
         time_diff = abs((utcnow() - created_at_dt).total_seconds())
         assert time_diff < 60, \
