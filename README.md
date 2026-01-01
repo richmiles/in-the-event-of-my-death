@@ -8,7 +8,7 @@ InTheEventOfMyDeath.com enables you to:
 - **Create time-locked secrets**: Submit text or files that will be released after a specific date/time
 - **Maintain zero-knowledge privacy**: The server stores only encrypted data, never plaintext or decryption keys
 - **Control access**: Two distinct links are generated:
-  - An **edit link** for the author to update the message or postpone its release
+  - An **edit link** for the author to postpone the unlock or expiration dates
   - A **decrypt link** for recipients to retrieve and decrypt the message after expiry
 
 ## Features
