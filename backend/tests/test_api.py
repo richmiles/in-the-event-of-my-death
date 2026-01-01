@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import secrets
+import uuid
 from datetime import timedelta
 from unittest.mock import MagicMock
 
@@ -136,10 +137,34 @@ class TestSecrets:
 
         assert create_response.status_code == 201
         data = create_response.json()
+        
+        # Verify secret_id is a valid UUID
         assert "secret_id" in data
+        try:
+            uuid.UUID(data["secret_id"])
+        except ValueError:
+            raise AssertionError(f"secret_id is not a valid UUID: {data['secret_id']}")
+        
+        # Verify unlock_at matches input (API adds 'Z' suffix and truncates to seconds)
         assert "unlock_at" in data
+        expected_unlock_at = unlock_at.replace(microsecond=0).isoformat() + "Z"
+        assert data["unlock_at"] == expected_unlock_at, \
+            f"unlock_at mismatch: expected {expected_unlock_at}, got {data['unlock_at']}"
+        
+        # Verify expires_at matches input (API adds 'Z' suffix and truncates to seconds)
         assert "expires_at" in data
+        expected_expires_at = expires_at.replace(microsecond=0).isoformat() + "Z"
+        assert data["expires_at"] == expected_expires_at, \
+            f"expires_at mismatch: expected {expected_expires_at}, got {data['expires_at']}"
+        
+        # Verify created_at is a valid recent timestamp
         assert "created_at" in data
+        # Parse the created_at timestamp and verify it's within last minute
+        from datetime import datetime
+        created_at_dt = datetime.fromisoformat(data["created_at"].rstrip("Z"))
+        time_diff = abs((utcnow() - created_at_dt).total_seconds())
+        assert time_diff < 60, \
+            f"created_at is not recent: {data['created_at']} (diff: {time_diff}s)"
 
     def test_retrieve_before_unlock(self, client):
         """Test that retrieval before unlock date is rejected."""
@@ -237,8 +262,18 @@ class TestSecrets:
         data = status_response.json()
         assert data["exists"] is True
         assert data["status"] == "pending"
+        
+        # Verify unlock_at matches input (API adds 'Z' suffix and truncates to seconds)
         assert "unlock_at" in data
+        expected_unlock_at = unlock_at.replace(microsecond=0).isoformat() + "Z"
+        assert data["unlock_at"] == expected_unlock_at, \
+            f"unlock_at mismatch: expected {expected_unlock_at}, got {data['unlock_at']}"
+        
+        # Verify expires_at matches input (API adds 'Z' suffix and truncates to seconds)
         assert "expires_at" in data
+        expected_expires_at = expires_at.replace(microsecond=0).isoformat() + "Z"
+        assert data["expires_at"] == expected_expires_at, \
+            f"expires_at mismatch: expected {expected_expires_at}, got {data['expires_at']}"
 
     def test_invalid_token(self, client):
         """Test that invalid tokens are rejected."""
@@ -691,10 +726,34 @@ class TestExpiryFeature:
 
         assert create_response.status_code == 201
         data = create_response.json()
+        
+        # Verify secret_id is a valid UUID
         assert "secret_id" in data
+        try:
+            uuid.UUID(data["secret_id"])
+        except ValueError:
+            raise AssertionError(f"secret_id is not a valid UUID: {data['secret_id']}")
+        
+        # Verify unlock_at matches input (API adds 'Z' suffix and truncates to seconds)
         assert "unlock_at" in data
+        expected_unlock_at = unlock_at.replace(microsecond=0).isoformat() + "Z"
+        assert data["unlock_at"] == expected_unlock_at, \
+            f"unlock_at mismatch: expected {expected_unlock_at}, got {data['unlock_at']}"
+        
+        # Verify expires_at matches input (API adds 'Z' suffix and truncates to seconds)
         assert "expires_at" in data
+        expected_expires_at = expires_at.replace(microsecond=0).isoformat() + "Z"
+        assert data["expires_at"] == expected_expires_at, \
+            f"expires_at mismatch: expected {expected_expires_at}, got {data['expires_at']}"
+        
+        # Verify created_at is a valid recent timestamp
         assert "created_at" in data
+        # Parse the created_at timestamp and verify it's within last minute
+        from datetime import datetime
+        created_at_dt = datetime.fromisoformat(data["created_at"].rstrip("Z"))
+        time_diff = abs((utcnow() - created_at_dt).total_seconds())
+        assert time_diff < 60, \
+            f"created_at is not recent: {data['created_at']} (diff: {time_diff}s)"
 
     def test_create_secret_without_expires_at_rejected(self, client):
         """Test that creating a secret without expires_at is rejected (required field)."""
