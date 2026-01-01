@@ -78,16 +78,18 @@ export default function PrivacyPolicy() {
         <h2>Data Retention</h2>
         <ul>
           <li>
-            <strong>Automatic deletion:</strong> Secrets are automatically deleted after their
-            expiry date, whether they were retrieved or not.
+            <strong>Automatic clearing:</strong> The encrypted content of secrets is automatically
+            cleared after their expiry date, whether they were retrieved or not.
           </li>
           <li>
             <strong>One-time access:</strong> Once a secret is successfully retrieved after its
-            unlock date, it is immediately and permanently deleted from our servers.
+            unlock date, its encrypted content (ciphertext, initialization vector, and
+            authentication tag) is immediately cleared from our servers.
           </li>
           <li>
-            <strong>Metadata retention:</strong> We may retain anonymized metadata for analytics and
-            security purposes, but this data cannot be linked back to the content of your secrets.
+            <strong>Metadata retention:</strong> After encrypted content is cleared, we retain
+            minimal metadata (timestamps, access tokens) for security and analytics purposes. This
+            metadata cannot be used to recover the secret&apos;s content.
           </li>
         </ul>
       </section>
