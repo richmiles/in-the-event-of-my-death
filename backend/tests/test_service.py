@@ -6,7 +6,14 @@ from datetime import timedelta
 
 import pytest
 
-from app.services.secret_service import clear_expired_secrets, create_secret
+from app.services.secret_service import (
+    TOKEN_PREFIX_LENGTH,
+    clear_expired_secrets,
+    create_secret,
+    find_secret_by_decrypt_token,
+    find_secret_by_edit_token,
+    get_token_prefix,
+)
 from tests.test_utils import utcnow
 
 
@@ -171,3 +178,116 @@ class TestClearExpiredSecrets:
         assert cleared_count == 0
         db_session.refresh(expired_secret)
         assert expired_secret.cleared_at == first_cleared_at
+
+
+class TestTokenPrefixLookup:
+    """Tests for token prefix-based O(1) lookup."""
+
+    def test_get_token_prefix(self):
+        """Test that get_token_prefix extracts first 16 chars."""
+        token = "abcdef1234567890xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        prefix = get_token_prefix(token)
+        assert prefix == "abcdef1234567890"
+        assert len(prefix) == TOKEN_PREFIX_LENGTH
+
+    def test_create_secret_stores_prefixes(self, db_session, sample_tokens):
+        """Test that create_secret stores token prefixes."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() + timedelta(hours=1),
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() + timedelta(days=7),
+        )
+
+        # Verify prefixes are stored correctly
+        assert secret.edit_token_prefix == sample_tokens["edit_token"][:TOKEN_PREFIX_LENGTH]
+        assert secret.decrypt_token_prefix == sample_tokens["decrypt_token"][:TOKEN_PREFIX_LENGTH]
+
+    def test_find_secret_by_edit_token_uses_prefix(self, db_session, sample_tokens):
+        """Test that find_secret_by_edit_token uses prefix for lookup."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        created = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() + timedelta(hours=1),
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() + timedelta(days=7),
+        )
+
+        # Find by edit token
+        found = find_secret_by_edit_token(db_session, sample_tokens["edit_token"])
+        assert found is not None
+        assert found.id == created.id
+
+        # Wrong token should not find it
+        wrong_token = secrets.token_hex(32)
+        not_found = find_secret_by_edit_token(db_session, wrong_token)
+        assert not_found is None
+
+    def test_find_secret_by_decrypt_token_uses_prefix(self, db_session, sample_tokens):
+        """Test that find_secret_by_decrypt_token uses prefix for lookup."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        created = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() + timedelta(hours=1),
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() + timedelta(days=7),
+        )
+
+        # Find by decrypt token
+        found = find_secret_by_decrypt_token(db_session, sample_tokens["decrypt_token"])
+        assert found is not None
+        assert found.id == created.id
+
+        # Wrong token should not find it
+        wrong_token = secrets.token_hex(32)
+        not_found = find_secret_by_decrypt_token(db_session, wrong_token)
+        assert not_found is None
+
+    def test_deleted_secrets_not_found_by_token(self, db_session, sample_tokens):
+        """Test that deleted secrets are not returned by token lookup."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() + timedelta(hours=1),
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() + timedelta(days=7),
+        )
+
+        # Mark as deleted
+        secret.is_deleted = True
+        db_session.commit()
+
+        # Should not be found
+        found_by_edit = find_secret_by_edit_token(db_session, sample_tokens["edit_token"])
+        found_by_decrypt = find_secret_by_decrypt_token(db_session, sample_tokens["decrypt_token"])
+        assert found_by_edit is None
+        assert found_by_decrypt is None
