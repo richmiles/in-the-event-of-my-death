@@ -83,8 +83,8 @@ export default function PrivacyPolicy() {
           </li>
           <li>
             <strong>One-time access:</strong> Once a secret is successfully retrieved after its
-            unlock date, its encrypted content (ciphertext, initialization vector, and authentication
-            tag) is immediately cleared from our servers.
+            unlock date, its encrypted content (ciphertext, initialization vector, and
+            authentication tag) is immediately cleared from our servers.
           </li>
           <li>
             <strong>Metadata retention:</strong> After encrypted content is cleared, we retain

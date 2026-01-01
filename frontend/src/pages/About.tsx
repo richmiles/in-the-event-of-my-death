@@ -34,7 +34,8 @@ export default function About() {
             <strong>Time-Locked:</strong> Recipients can only access after the unlock date.
           </li>
           <li>
-            <strong>One-Time Access:</strong> Retrieved once, then encrypted content permanently cleared.
+            <strong>One-Time Access:</strong> Retrieved once, then encrypted content permanently
+            cleared.
           </li>
           <li>
             <strong>No Accounts:</strong> No sign-up. Just create and share.
@@ -72,9 +73,9 @@ export default function About() {
         <div className="faq-item">
           <h3>What if I don&apos;t retrieve my secret before it expires?</h3>
           <p>
-            If a secret is not retrieved before its expiry date, its encrypted content is permanently
-            cleared from our servers and cannot be recovered. Make sure the expiry date gives your
-            recipient enough time after the unlock date to retrieve the secret.
+            If a secret is not retrieved before its expiry date, its encrypted content is
+            permanently cleared from our servers and cannot be recovered. Make sure the expiry date
+            gives your recipient enough time after the unlock date to retrieve the secret.
           </p>
         </div>
       </section>
