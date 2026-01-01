@@ -8,9 +8,15 @@ from sqlalchemy import inspect
 
 from app.config import settings
 from app.database import engine
+from app.logging_config import get_logger, setup_logging
+from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import limiter
 from app.routers import challenges, secrets
 from app.scheduler import shutdown_scheduler, start_scheduler
+
+# Initialize logging before anything else
+setup_logging()
+logger = get_logger("app")
 
 # Database tables are managed by Alembic migrations
 # Run: poetry run alembic upgrade head
@@ -40,8 +46,10 @@ def check_database_tables():
 async def lifespan(app: FastAPI):
     """Manage application lifecycle - start/stop scheduler."""
     check_database_tables()
+    logger.info("app_starting", version="0.1.0-beta")
     start_scheduler()
     yield
+    logger.info("app_stopping")
     shutdown_scheduler()
 
 
@@ -64,6 +72,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Request logging (after CORS so it sees all requests)
+app.add_middleware(LoggingMiddleware)
 
 # Routers
 app.include_router(challenges.router, prefix="/api/v1", tags=["challenges"])

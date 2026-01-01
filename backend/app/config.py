@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # e.g., CORS_ORIGINS="https://ieomd.com,https://www.ieomd.com"
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
+    # Logging
+    log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR
+    log_format: str = "console"  # "console" or "json"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v) -> list[str]:

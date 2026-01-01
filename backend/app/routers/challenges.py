@@ -1,3 +1,4 @@
+import structlog
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,7 @@ from app.schemas.challenge import ChallengeCreate, ChallengeResponse
 from app.services.pow_service import generate_challenge
 
 router = APIRouter()
+logger = structlog.get_logger()
 
 
 @router.post("/challenges", response_model=ChallengeResponse, status_code=201)
@@ -25,6 +27,13 @@ async def create_challenge(
     challenge = generate_challenge(
         db=db,
         payload_hash=challenge_data.payload_hash,
+        ciphertext_size=challenge_data.ciphertext_size,
+    )
+
+    logger.info(
+        "challenge_created",
+        challenge_id=challenge.id,
+        difficulty=challenge.difficulty,
         ciphertext_size=challenge_data.ciphertext_size,
     )
 
