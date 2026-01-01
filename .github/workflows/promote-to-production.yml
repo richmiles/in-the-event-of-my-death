@@ -15,6 +15,7 @@ on:
 permissions:
   contents: write
   actions: read
+  pull-requests: write
 
 jobs:
   get_staging_tag:
@@ -86,17 +87,72 @@ jobs:
           echo "new_version=$new_version" >> "$GITHUB_OUTPUT"
           echo "Bumped to version: $new_version"
 
-      - name: Commit and tag
+      - name: Create branch and PR
+        id: create_pr
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           version="${{ steps.bump.outputs.new_version }}"
+          branch="chore/bump-version-v${version}"
+
+          # Create and push branch
+          git checkout -b "$branch"
           git add frontend/package.json
           git commit -m "chore: bump version to v${version}"
-          git tag "v${version}"
-          git push origin main --tags
+          git push origin "$branch"
+
+          # Create PR and merge it
+          pr_url=$(gh pr create \
+            --title "chore: bump version to v${version}" \
+            --body "Automated version bump for release v${version}" \
+            --base main \
+            --head "$branch")
+
+          echo "Created PR: $pr_url"
+
+          # Wait for checks then merge
+          gh pr merge "$pr_url" --auto --squash --delete-branch
 
           echo "## Version Bump" >> "$GITHUB_STEP_SUMMARY"
           echo "- **New version:** v${version}" >> "$GITHUB_STEP_SUMMARY"
           echo "- **Bump type:** ${{ inputs.version_bump }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **PR:** $pr_url" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for PR merge and tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ steps.bump.outputs.new_version }}"
+          branch="chore/bump-version-v${version}"
+
+          # Wait for the PR to be merged (auto-merge enabled above)
+          echo "Waiting for PR to be merged..."
+          for i in {1..60}; do
+            state=$(gh pr view "$branch" --json state --jq '.state')
+            if [ "$state" = "MERGED" ]; then
+              echo "PR merged successfully"
+              break
+            fi
+            if [ "$state" = "CLOSED" ]; then
+              echo "::error::PR was closed without merging"
+              exit 1
+            fi
+            echo "PR state: $state, waiting... ($i/60)"
+            sleep 10
+          done
+
+          if [ "$state" != "MERGED" ]; then
+            echo "::error::Timed out waiting for PR to merge"
+            exit 1
+          fi
+
+          # Fetch the merged main and create tag
+          git fetch origin main
+          git checkout origin/main
+          git tag "v${version}"
+          git push origin "v${version}"
+
+          echo "- **Tag:** v${version} created" >> "$GITHUB_STEP_SUMMARY"
 
   deploy_production:
     runs-on: ubuntu-latest
