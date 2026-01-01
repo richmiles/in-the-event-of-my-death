@@ -13,6 +13,7 @@ from app.services.secret_service import (
     find_secret_by_decrypt_token,
     find_secret_by_edit_token,
     get_token_prefix,
+    retrieve_secret,
 )
 from tests.test_utils import utcnow
 
@@ -291,3 +292,118 @@ class TestTokenPrefixLookup:
         found_by_decrypt = find_secret_by_decrypt_token(db_session, sample_tokens["decrypt_token"])
         assert found_by_edit is None
         assert found_by_decrypt is None
+
+
+class TestRetrieveSecret:
+    """Tests for the retrieve_secret function."""
+
+    def test_retrieve_secret_clears_ciphertext_immediately(self, db_session, sample_tokens):
+        """Test that ciphertext is cleared in the same transaction as retrieval."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        # Create an unlocked secret (unlock_at in the past)
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() - timedelta(hours=1),
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() + timedelta(days=7),
+        )
+
+        # Verify ciphertext exists before retrieval
+        assert secret.ciphertext is not None
+        assert secret.iv is not None
+        assert secret.auth_tag is not None
+        assert secret.cleared_at is None
+
+        # Retrieve the secret
+        result = retrieve_secret(db_session, secret)
+
+        # Verify retrieval was successful and returned data
+        assert result["status"] == "available"
+        assert result["ciphertext"] == ciphertext
+        assert result["iv"] == iv
+        assert result["auth_tag"] == auth_tag
+
+        # Verify ciphertext is cleared immediately (in same transaction)
+        db_session.refresh(secret)
+        assert secret.ciphertext is None
+        assert secret.iv is None
+        assert secret.auth_tag is None
+        assert secret.cleared_at is not None
+        assert secret.retrieved_at is not None
+        assert secret.is_deleted is True
+
+    def test_retrieve_secret_already_retrieved(self, db_session, sample_tokens):
+        """Test that already retrieved secrets return appropriate status."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() - timedelta(hours=1),
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() + timedelta(days=7),
+        )
+
+        # First retrieval
+        result1 = retrieve_secret(db_session, secret)
+        assert result1["status"] == "available"
+
+        # Second retrieval attempt
+        result2 = retrieve_secret(db_session, secret)
+        assert result2["status"] == "retrieved"
+
+    def test_retrieve_secret_not_yet_unlocked(self, db_session, sample_tokens):
+        """Test that secrets not yet unlocked return pending status."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() + timedelta(hours=1),  # Future unlock
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() + timedelta(days=7),
+        )
+
+        result = retrieve_secret(db_session, secret)
+        assert result["status"] == "pending"
+        # Ciphertext should NOT be cleared
+        db_session.refresh(secret)
+        assert secret.ciphertext is not None
+        assert secret.cleared_at is None
+
+    def test_retrieve_secret_expired(self, db_session, sample_tokens):
+        """Test that expired secrets return expired status."""
+        iv = base64.b64encode(secrets.token_bytes(12)).decode()
+        auth_tag = base64.b64encode(secrets.token_bytes(16)).decode()
+        ciphertext = base64.b64encode(secrets.token_bytes(100)).decode()
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=ciphertext,
+            iv_b64=iv,
+            auth_tag_b64=auth_tag,
+            unlock_at=utcnow() - timedelta(days=2),
+            edit_token=sample_tokens["edit_token"],
+            decrypt_token=sample_tokens["decrypt_token"],
+            expires_at=utcnow() - timedelta(hours=1),  # Already expired
+        )
+
+        result = retrieve_secret(db_session, secret)
+        assert result["status"] == "expired"

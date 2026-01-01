@@ -158,19 +158,26 @@ def retrieve_secret(db: Session, secret: Secret) -> dict:
             "message": "Secret not yet available",
         }
 
-    # Mark as retrieved and prepare for deletion
-    secret.retrieved_at = now
-    secret.is_deleted = True
-    db.commit()
-
-    return {
+    # Capture data before clearing
+    result = {
         "status": "available",
         "ciphertext": base64.b64encode(secret.ciphertext).decode(),
         "iv": base64.b64encode(secret.iv).decode(),
         "auth_tag": base64.b64encode(secret.auth_tag).decode(),
-        "retrieved_at": secret.retrieved_at,
+        "retrieved_at": now,
         "message": "This secret has been deleted and cannot be retrieved again.",
     }
+
+    # Clear ciphertext immediately in the same transaction
+    secret.retrieved_at = now
+    secret.is_deleted = True
+    secret.ciphertext = None
+    secret.iv = None
+    secret.auth_tag = None
+    secret.cleared_at = now
+    db.commit()
+
+    return result
 
 
 def get_secret_status(db: Session, secret: Secret) -> dict:
