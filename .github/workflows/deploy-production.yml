@@ -37,7 +37,8 @@ jobs:
       - name: Smoke test
         run: |
           for i in $(seq 1 30); do
-            if curl -fsS "https://${{ secrets.PROD_SITE_HOST }}/health" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status") == "healthy" else 1)'; then
+            response=$(curl -sS --fail-with-body "https://${{ secrets.PROD_SITE_HOST }}/health" 2>/dev/null) || { sleep 2; continue; }
+            if echo "$response" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status") == "healthy" else 1)'; then
               exit 0
             fi
             sleep 2
