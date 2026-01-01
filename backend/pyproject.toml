@@ -6,13 +6,13 @@ authors = ["Rich Miles <rich@ieomd.com>"]
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = "^3.14"
 fastapi = "^0.109.0"
 uvicorn = {extras = ["standard"], version = "^0.27.0"}
 sqlalchemy = "^2.0.25"
 alembic = "^1.13.1"
 argon2-cffi = "^23.1.0"
-pydantic = "^2.5.3"
+pydantic = "^2.12.5"
 pydantic-settings = "^2.1.0"
 slowapi = "^0.1.9"
 python-multipart = "^0.0.6"
@@ -31,7 +31,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
