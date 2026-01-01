@@ -1,0 +1,90 @@
+name: Promote to Production
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  get_staging_tag:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.get_tag.outputs.tag }}
+      commit_sha: ${{ steps.get_tag.outputs.commit_sha }}
+      commit_message: ${{ steps.get_tag.outputs.commit_message }}
+    steps:
+      - name: Get latest staging deployment tag
+        id: get_tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Find the latest successful staging deployment
+          run_info=$(gh api \
+            "/repos/${{ github.repository }}/actions/workflows/build-and-deploy-staging.yml/runs?status=success&per_page=1" \
+            --jq '.workflow_runs[0] | {head_sha, display_title}')
+
+          if [ -z "$run_info" ] || [ "$run_info" = "null" ]; then
+            echo "::error::No successful staging deployments found"
+            exit 1
+          fi
+
+          commit_sha=$(echo "$run_info" | jq -r '.head_sha')
+          commit_message=$(echo "$run_info" | jq -r '.display_title')
+          short_sha="${commit_sha::7}"
+          tag="sha-${short_sha}"
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$commit_sha" >> "$GITHUB_OUTPUT"
+          echo "commit_message=$commit_message" >> "$GITHUB_OUTPUT"
+
+          echo "## Staging Version" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Tag:** \`$tag\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`$commit_sha\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Message:** $commit_message" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy_production:
+    runs-on: ubuntu-latest
+    needs: get_staging_tag
+    environment: production
+    steps:
+      - name: Display deployment info
+        run: |
+          echo "## Production Deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deploying **${{ needs.get_staging_tag.outputs.tag }}** to production" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Commit:** \`${{ needs.get_staging_tag.outputs.commit_sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Message:** ${{ needs.get_staging_tag.outputs.commit_message }}" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Add SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.PROD_SSH_KEY }}
+
+      - name: Configure known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.PROD_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy (remote)
+        run: |
+          tag="${{ needs.get_staging_tag.outputs.tag }}"
+          backend="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-backend:${tag}"
+          web="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-web:${tag}"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 "${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}" \
+            "sudo /usr/local/bin/ieomd-deploy deploy --dir /opt/ieomd --backend-image ${backend} --web-image ${web}"
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "https://${{ secrets.PROD_SITE_HOST }}/health" | python3 -c 'import json,sys; sys.exit(0 if json.load(sys.stdin).get("status") == "healthy" else 1)'; then
+              echo "✅ Production is healthy" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Smoke test failed: /health never became healthy" >&2
+          exit 1
