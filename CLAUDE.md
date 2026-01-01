@@ -46,9 +46,12 @@
    - If no issue exists, create one: `gh issue create --title "<title>" --body "<description>"`
    - Every change must trace back to an issue
 
-2. **Link the issue to the GitHub project**
-   - Add to project: `gh project item-add 6 --owner richmiles --url <issue-url>`
-   - Project #6 is "IEOMD Release v1.0"
+2. **Link the issue to the appropriate GitHub project**
+   - `gh project item-add <project-number> --owner richmiles --url <issue-url>`
+   - Active projects:
+     - **#7** - IEOMD v0.1.x - Stabilization (bug fixes, cleanup)
+     - **#8** - IEOMD v0.2 - Payment Infrastructure (capability tokens, Lightning)
+     - **#9** - IEOMD v0.3 - Premium Features (file uploads, edit content)
 
 3. **Create a branch for the issue**
    - Use: `gh issue develop <issue-number> --checkout`
