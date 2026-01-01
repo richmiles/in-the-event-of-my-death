@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from starlette.requests import Request
 
 from app.middleware.rate_limit import get_real_client_ip
+from app.models.secret import Secret
 from tests.test_utils import utcnow
 
 
@@ -910,6 +911,136 @@ class TestExpiryFeature:
         data = status_response.json()
         assert "expires_at" in data
         assert data["expires_at"] is not None
+
+
+class TestRetrieveEndpoint:
+    """Tests for the /secrets/retrieve endpoint success and error paths."""
+
+    def _create_secret_via_api(self, client, db_session, test_data=None):
+        """Helper to create a secret through the API and return the db record.
+
+        Returns tuple of (secret, test_data) where secret is the SQLAlchemy model instance.
+        """
+        if test_data is None:
+            test_data = generate_test_data()
+
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        assert challenge_response.status_code == 201
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret with future unlock date
+        unlock_at = utcnow() + timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_at": unlock_at.isoformat(),
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+        assert create_response.status_code == 201
+
+        # Get the secret from the database
+        secret = (
+            db_session.query(Secret)
+            .filter(Secret.decrypt_token_prefix == test_data["decrypt_token"][:16])
+            .first()
+        )
+        assert secret is not None
+
+        return secret, test_data
+
+    def test_retrieve_after_unlock_success(self, client, db_session):
+        """Test successful retrieval after unlock returns correct data."""
+        secret, test_data = self._create_secret_via_api(client, db_session)
+
+        # Set unlock_at to the past to simulate time passing
+        secret.unlock_at = utcnow() - timedelta(hours=1)
+        db_session.commit()
+
+        # Retrieve the secret
+        retrieve_response = client.get(
+            "/api/v1/secrets/retrieve",
+            headers={"Authorization": f"Bearer {test_data['decrypt_token']}"},
+        )
+
+        assert retrieve_response.status_code == 200
+        data = retrieve_response.json()
+        assert data["status"] == "available"
+        assert data["ciphertext"] == test_data["ciphertext"]
+        assert data["iv"] == test_data["iv"]
+        assert data["auth_tag"] == test_data["auth_tag"]
+
+    def test_retrieve_already_retrieved_returns_404(self, client, db_session):
+        """Test that retrieving twice returns 404 (secret is logically deleted after retrieval).
+
+        After successful retrieval, the secret is marked as deleted and excluded from lookups.
+        This is intentional for security - it prevents probing to see if a secret ever existed.
+        """
+        secret, test_data = self._create_secret_via_api(client, db_session)
+
+        # Set unlock_at to the past
+        secret.unlock_at = utcnow() - timedelta(hours=1)
+        db_session.commit()
+
+        # First retrieval should succeed
+        first_response = client.get(
+            "/api/v1/secrets/retrieve",
+            headers={"Authorization": f"Bearer {test_data['decrypt_token']}"},
+        )
+        assert first_response.status_code == 200
+
+        # Second retrieval returns 404 because secret is now logically deleted
+        # (This is correct security behavior - doesn't reveal if secret ever existed)
+        second_response = client.get(
+            "/api/v1/secrets/retrieve",
+            headers={"Authorization": f"Bearer {test_data['decrypt_token']}"},
+        )
+        assert second_response.status_code == 404
+        assert second_response.json()["detail"] == "Secret not found"
+
+    def test_retrieve_expired_returns_410(self, client, db_session):
+        """Test that expired secrets return 410 with 'expired' status."""
+        secret, test_data = self._create_secret_via_api(client, db_session)
+
+        # Set unlock_at and expires_at to past (secret is now expired)
+        secret.unlock_at = utcnow() - timedelta(days=2)
+        secret.expires_at = utcnow() - timedelta(hours=1)
+        db_session.commit()
+
+        # Attempt to retrieve expired secret
+        retrieve_response = client.get(
+            "/api/v1/secrets/retrieve",
+            headers={"Authorization": f"Bearer {test_data['decrypt_token']}"},
+        )
+
+        assert retrieve_response.status_code == 410
+        detail = retrieve_response.json()["detail"]
+        assert detail["status"] == "expired"
+        assert "expires_at" in detail
+        assert "message" in detail
 
 
 class TestRateLimitClientIP:
