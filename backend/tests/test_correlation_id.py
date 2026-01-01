@@ -1,5 +1,12 @@
 """Tests for correlation ID header on all responses."""
 
+from fastapi.testclient import TestClient
+
+import app.main as main_module
+from app.database import get_db
+from app.main import app
+from app.middleware.rate_limit import limiter
+
 
 def test_correlation_id_on_success(client):
     """Test that correlation ID is included on successful responses."""
@@ -44,12 +51,6 @@ def test_correlation_id_on_unhandled_exception(db_session, monkeypatch):
     This test simulates an actual unhandled exception to verify that the custom
     exception handler correctly adds the X-Correlation-ID header to 500 responses.
     """
-    from fastapi.testclient import TestClient
-
-    import app.main as main_module
-    from app.database import get_db
-    from app.main import app
-    from app.middleware.rate_limit import limiter
     from app.routers import secrets
 
     def raise_error(*args, **kwargs):

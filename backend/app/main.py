@@ -92,7 +92,7 @@ async def add_correlation_id_to_errors(request: Request, exc: Exception):
 
     # Preserve HTTPException details and headers
     if isinstance(exc, HTTPException):
-        headers = dict(exc.headers) if exc.headers else {}
+        headers = dict(exc.headers or {})
         headers["X-Correlation-ID"] = correlation_id
         return JSONResponse(
             status_code=exc.status_code,
