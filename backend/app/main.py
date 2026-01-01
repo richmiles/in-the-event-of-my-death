@@ -73,7 +73,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Request logging (after CORS so it sees all requests)
+# Request logging (added before CORS in middleware stack, so executes after CORS)
 app.add_middleware(LoggingMiddleware)
 
 # Routers
