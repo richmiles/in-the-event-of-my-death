@@ -80,5 +80,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 path=request.url.path,
                 error=str(e),
                 duration_ms=round(duration_ms, 2),
+                exc_info=True,
             )
             raise

@@ -63,7 +63,7 @@ def setup_logging() -> None:
     logging.getLogger("apscheduler").setLevel(logging.INFO)
 
 
-def get_logger(name: str | None = None) -> structlog.stdlib.BoundLogger:
+def get_logger(name: str | None = None):
     """
     Get a structlog logger instance.
 
