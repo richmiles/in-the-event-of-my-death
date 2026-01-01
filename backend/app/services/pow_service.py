@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
@@ -6,6 +7,18 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.challenge import Challenge
+
+
+def compute_payload_hash(ciphertext_b64: str, iv_b64: str, auth_tag_b64: str) -> str:
+    """
+    Compute SHA-256 hash of the payload for PoW binding verification.
+
+    Hash is computed over: ciphertext || iv || auth_tag (raw bytes)
+    """
+    ciphertext = base64.b64decode(ciphertext_b64)
+    iv = base64.b64decode(iv_b64)
+    auth_tag = base64.b64decode(auth_tag_b64)
+    return hashlib.sha256(ciphertext + iv + auth_tag).hexdigest()
 
 
 def compute_expected_difficulty(ciphertext_size: int) -> int:

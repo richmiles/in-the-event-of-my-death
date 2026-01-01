@@ -1,5 +1,4 @@
 import base64
-import hashlib
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -18,6 +17,7 @@ from app.schemas.secret import (
 )
 from app.services.pow_service import (
     compute_expected_difficulty,
+    compute_payload_hash,
     mark_challenge_used,
     validate_pow,
 )
@@ -39,18 +39,6 @@ def extract_bearer_token(authorization: str = Header(...)) -> str:
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization header format")
     return authorization[7:]
-
-
-def compute_payload_hash(ciphertext_b64: str, iv_b64: str, auth_tag_b64: str) -> str:
-    """
-    Compute SHA-256 hash of the payload for PoW binding verification.
-
-    Hash is computed over: ciphertext || iv || auth_tag (raw bytes)
-    """
-    ciphertext = base64.b64decode(ciphertext_b64)
-    iv = base64.b64decode(iv_b64)
-    auth_tag = base64.b64decode(auth_tag_b64)
-    return hashlib.sha256(ciphertext + iv + auth_tag).hexdigest()
 
 
 @router.post("/secrets", response_model=SecretCreateResponse, status_code=201)
