@@ -194,8 +194,11 @@ RATE_LIMIT_RETRIEVES=30/minute
 │   ├── src/
 │   │   ├── components/  # React components
 │   │   ├── hooks/       # Custom React hooks
-│   │   ├── lib/         # Utilities and crypto
-│   │   └── types/       # TypeScript types
+│   │   ├── pages/       # Page components
+│   │   ├── services/    # API and crypto services
+│   │   ├── types/       # TypeScript types
+│   │   ├── utils/       # Utility functions
+│   │   └── workers/     # Web workers (PoW)
 │   ├── public/          # Static assets
 │   └── package.json     # Node dependencies
 ├── docs/                # Additional documentation
