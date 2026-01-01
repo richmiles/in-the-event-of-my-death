@@ -106,20 +106,6 @@ def mark_challenge_used(db: Session, challenge: Challenge) -> None:
     db.commit()
 
 
-def verify_pow(db: Session, challenge_id: str, nonce: str, counter: int, payload_hash: str) -> bool:
-    """
-    Verify a proof-of-work solution and mark challenge as used.
-
-    DEPRECATED: Use validate_pow() + mark_challenge_used() for better error handling.
-    Kept for backwards compatibility.
-
-    Returns True if valid, raises ValueError with specific message if invalid.
-    """
-    challenge = validate_pow(db, challenge_id, nonce, counter, payload_hash)
-    mark_challenge_used(db, challenge)
-    return True
-
-
 def cleanup_expired_challenges(db: Session) -> int:
     """Delete expired challenges. Returns count of deleted rows."""
     result = (
