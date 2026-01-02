@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR
     log_format: str = "console"  # "console" or "json"
 
+    # Discord Webhooks
+    discord_feedback_webhook_url: str | None = None
+
+    # Rate Limiting - Feedback
+    rate_limit_feedback: str = "5/minute"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def parse_cors_origins(cls, v) -> list[str]:
