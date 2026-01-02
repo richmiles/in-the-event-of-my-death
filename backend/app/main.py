@@ -5,7 +5,6 @@ import structlog
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy import inspect
 
@@ -16,6 +15,7 @@ from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import limiter
 from app.routers import challenges, feedback, secrets
 from app.scheduler import shutdown_scheduler, start_scheduler
+from app.services.discord_service import send_error_alert
 
 # Initialize logging before anything else
 setup_logging()
@@ -92,6 +92,15 @@ async def add_correlation_id_to_errors(request: Request, exc: Exception):
 
     # Preserve HTTPException details and headers
     if isinstance(exc, HTTPException):
+        # Alert on 5xx HTTPExceptions
+        if exc.status_code >= 500:
+            await send_error_alert(
+                error_type="HTTPException",
+                message=str(exc.detail),
+                path=request.url.path,
+                correlation_id=correlation_id,
+                status_code=exc.status_code,
+            )
         headers = dict(exc.headers or {})
         headers["X-Correlation-ID"] = correlation_id
         return JSONResponse(
@@ -101,6 +110,14 @@ async def add_correlation_id_to_errors(request: Request, exc: Exception):
         )
 
     # For all other exceptions, return 500
+    # Alert on unhandled exceptions
+    await send_error_alert(
+        error_type=type(exc).__name__,
+        message=str(exc),
+        path=request.url.path,
+        correlation_id=correlation_id,
+        status_code=500,
+    )
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal Server Error"},
@@ -110,7 +127,28 @@ async def add_correlation_id_to_errors(request: Request, exc: Exception):
 
 # Rate limiting
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    """Custom rate limit handler that sends Discord alerts."""
+    # Get correlation ID from structlog context
+    contextvars = structlog.contextvars.get_contextvars()
+    correlation_id = contextvars.get("correlation_id")
+
+    await send_error_alert(
+        error_type="Rate Limit Exceeded",
+        message=str(exc.detail),
+        path=request.url.path,
+        correlation_id=correlation_id,
+        status_code=429,
+    )
+    return JSONResponse(
+        status_code=429,
+        content={"detail": str(exc.detail)},
+        headers={"Retry-After": "60", "X-Correlation-ID": correlation_id or ""},
+    )
+
 
 # CORS
 app.add_middleware(
