@@ -6,6 +6,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.config import settings
 from app.database import SessionLocal
 from app.logging_config import get_logger
+from app.services.discord_service import send_error_alert_sync
 from app.services.pow_service import cleanup_expired_challenges
 from app.services.secret_service import clear_expired_secrets
 
@@ -22,6 +23,11 @@ def cleanup_secrets_job() -> None:
         logger.info("cleanup_secrets_completed", cleared_count=cleared)
     except Exception as e:
         logger.error("cleanup_secrets_failed", error=str(e))
+        send_error_alert_sync(
+            error_type="Scheduler Job Failed",
+            message=str(e),
+            context={"job_name": "cleanup_secrets"},
+        )
     finally:
         db.close()
 
@@ -34,6 +40,11 @@ def cleanup_challenges_job() -> None:
         logger.info("cleanup_challenges_completed", deleted_count=deleted)
     except Exception as e:
         logger.error("cleanup_challenges_failed", error=str(e))
+        send_error_alert_sync(
+            error_type="Scheduler Job Failed",
+            message=str(e),
+            context={"job_name": "cleanup_challenges"},
+        )
     finally:
         db.close()
 
