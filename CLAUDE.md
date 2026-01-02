@@ -49,9 +49,9 @@
 2. **Link the issue to the appropriate GitHub project**
    - `gh project item-add <project-number> --owner richmiles --url <issue-url>`
    - Active projects:
-     - **#7** - IEOMD v0.1.x - Stabilization (bug fixes, cleanup)
      - **#8** - IEOMD v0.2 - Payment Infrastructure (capability tokens, Lightning)
      - **#9** - IEOMD v0.3 - Premium Features (file uploads, edit content)
+     - **#10** - IEOMD - ChatOps & Notifications (feedback, alerts)
 
 3. **Create a branch for the issue**
    - Use: `gh issue develop <issue-number> --checkout`
