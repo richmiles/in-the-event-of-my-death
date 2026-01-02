@@ -1,20 +1,16 @@
-import re
-
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 class FeedbackCreate(BaseModel):
     message: str = Field(..., min_length=10, max_length=2000)
-    email: str | None = Field(None, max_length=254)
+    email: EmailStr | None = Field(None)
 
-    @field_validator("email")
+    @field_validator("email", mode="before")
     @classmethod
-    def validate_email(cls, v: str | None) -> str | None:
-        if v is None or v == "":
+    def empty_string_to_none(cls, v: str | None) -> str | None:
+        """Convert empty string to None for optional email."""
+        if v == "":
             return None
-        # Basic email format validation
-        if not re.match(r"^[^@]+@[^@]+\.[^@]+$", v):
-            raise ValueError("Invalid email format")
         return v
 
 
