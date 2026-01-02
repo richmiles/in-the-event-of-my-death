@@ -52,6 +52,7 @@
      - **#8** - IEOMD v0.2 - Payment Infrastructure (capability tokens, Lightning)
      - **#9** - IEOMD v0.3 - Premium Features (file uploads, edit content)
      - **#10** - IEOMD - ChatOps & Notifications (feedback, alerts)
+     - **#11** - IEOMD - UX Enhancements (link ordering, defaults, sharing)
 
 3. **Create a branch for the issue**
    - Use: `gh issue develop <issue-number> --checkout`
