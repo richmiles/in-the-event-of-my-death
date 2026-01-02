@@ -1,4 +1,4 @@
-from pydantic import ConfigDict, field_validator
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -31,21 +31,20 @@ class Settings(BaseSettings):
     cleanup_interval_hours: int = 1
 
     # CORS
-    # Can be set as comma-separated string via environment variable
-    # e.g., CORS_ORIGINS="https://ieomd.com,https://www.ieomd.com"
+    # Set as JSON array via environment variable
+    # e.g., CORS_ORIGINS='["https://ieomd.com"]'
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # Logging
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR
     log_format: str = "console"  # "console" or "json"
 
-    @field_validator("cors_origins", mode="before")
-    @classmethod
-    def parse_cors_origins(cls, v) -> list[str]:
-        """Parse CORS origins from comma-separated string or list."""
-        if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",") if origin.strip()]
-        return v
+    # Discord Webhooks
+    discord_feedback_webhook_url: str | None = None
+    discord_alerts_webhook_url: str | None = None
+
+    # Rate Limiting - Feedback
+    rate_limit_feedback: str = "5/minute"
 
 
 settings = Settings()

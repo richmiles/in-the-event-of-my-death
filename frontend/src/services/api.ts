@@ -157,4 +157,19 @@ export async function updateSecretDates(
   return handleResponse(response)
 }
 
+/**
+ * Submit user feedback.
+ */
+export async function submitFeedback(
+  message: string,
+  email?: string,
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`${API_BASE}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, email: email || null }),
+  })
+  return handleResponse(response)
+}
+
 export { ApiError }

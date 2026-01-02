@@ -14,7 +14,7 @@ from app.database import engine
 from app.logging_config import get_logger, setup_logging
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import limiter
-from app.routers import challenges, secrets
+from app.routers import challenges, feedback, secrets
 from app.scheduler import shutdown_scheduler, start_scheduler
 
 # Initialize logging before anything else
@@ -126,6 +126,7 @@ app.add_middleware(LoggingMiddleware)
 
 # Routers
 app.include_router(challenges.router, prefix="/api/v1", tags=["challenges"])
+app.include_router(feedback.router, prefix="/api/v1", tags=["feedback"])
 app.include_router(secrets.router, prefix="/api/v1", tags=["secrets"])
 
 
