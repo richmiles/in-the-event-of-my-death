@@ -13,7 +13,7 @@ from app.database import engine
 from app.logging_config import get_logger, setup_logging
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import limiter
-from app.routers import challenges, feedback, secrets
+from app.routers import capability_tokens, challenges, feedback, secrets
 from app.scheduler import shutdown_scheduler, start_scheduler
 from app.services.discord_service import send_error_alert
 
@@ -32,7 +32,7 @@ def check_database_tables():
     Raises RuntimeError with helpful message if tables are missing.
     This helps catch the case where migrations haven't been run.
     """
-    required_tables = {"secrets", "pow_challenges"}
+    required_tables = {"secrets", "pow_challenges", "capability_tokens"}
     inspector = inspect(engine)
     existing_tables = set(inspector.get_table_names())
 
@@ -163,6 +163,7 @@ app.add_middleware(
 app.add_middleware(LoggingMiddleware)
 
 # Routers
+app.include_router(capability_tokens.router, prefix="/api/v1", tags=["capability-tokens"])
 app.include_router(challenges.router, prefix="/api/v1", tags=["challenges"])
 app.include_router(feedback.router, prefix="/api/v1", tags=["feedback"])
 app.include_router(secrets.router, prefix="/api/v1", tags=["secrets"])

@@ -50,14 +50,14 @@ class SecretCreate(BaseModel):
     expires_at: datetime
     edit_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     decrypt_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
-    pow_proof: PowProof
+    pow_proof: PowProof | None = None  # Optional when using capability token
 
     @field_validator("ciphertext")
     @classmethod
     def validate_ciphertext_base64(cls, v: str) -> str:
+        # Only validate base64 format here. Size validation is done in the router
+        # because the limit depends on whether PoW or capability token is used.
         decoded = strict_base64_decode(v, "ciphertext")
-        if len(decoded) > settings.max_ciphertext_size:
-            raise ValueError(f"Ciphertext exceeds {settings.max_ciphertext_size} bytes")
         if len(decoded) < 1:
             raise ValueError("Ciphertext cannot be empty")
         return v

@@ -1,4 +1,5 @@
 import base64
+from datetime import UTC, datetime
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
@@ -14,6 +15,10 @@ from app.schemas.secret import (
     SecretEditResponse,
     SecretRetrieveResponse,
     SecretStatusResponse,
+)
+from app.services.capability_token_service import (
+    consume_capability_token,
+    find_capability_token,
 )
 from app.services.pow_service import (
     compute_expected_difficulty,
@@ -47,51 +52,103 @@ async def create_new_secret(
     request: Request,
     secret_data: SecretCreate,
     db: Session = Depends(get_db),
+    x_capability_token: str | None = Header(None, alias="X-Capability-Token"),
 ):
     """
     Create a new time-locked secret.
 
-    Requires a valid proof-of-work solution bound to the exact payload.
+    Requires EITHER:
+    - A valid proof-of-work solution bound to the exact payload, OR
+    - A valid capability token (X-Capability-Token header)
+
+    Capability tokens allow larger files and bypass PoW.
     """
-    # Step 1: Validate PoW (does NOT mark challenge as used yet)
-    try:
-        challenge = validate_pow(
-            db=db,
-            challenge_id=secret_data.pow_proof.challenge_id,
-            nonce=secret_data.pow_proof.nonce,
-            counter=secret_data.pow_proof.counter,
-            payload_hash=secret_data.pow_proof.payload_hash,
-        )
-    except ValueError as e:
-        logger.warning("pow_validation_failed", error=str(e))
-        raise HTTPException(status_code=400, detail=str(e))
+    capability_token = None
+    challenge = None
 
-    # Step 2: Verify payload hash matches actual ciphertext
-    # This prevents solving PoW for one payload and submitting another
-    computed_hash = compute_payload_hash(
-        secret_data.ciphertext,
-        secret_data.iv,
-        secret_data.auth_tag,
-    )
-    if computed_hash != secret_data.pow_proof.payload_hash:
-        logger.warning("payload_hash_mismatch")
-        raise HTTPException(
-            status_code=400,
-            detail="Payload hash mismatch - ciphertext doesn't match PoW proof",
-        )
+    # Check for capability token (bypasses PoW)
+    if x_capability_token:
+        if len(x_capability_token) != 64:
+            raise HTTPException(status_code=400, detail="Invalid capability token format")
 
-    # Step 3: Verify difficulty is sufficient for actual payload size
-    # Allows "overpay" (solving harder challenge than needed) but rejects "underpay"
-    actual_ciphertext_size = len(base64.b64decode(secret_data.ciphertext))
-    expected_difficulty = compute_expected_difficulty(actual_ciphertext_size)
-    if challenge.difficulty < expected_difficulty:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient PoW difficulty for payload size: "
-            f"got {challenge.difficulty}, need {expected_difficulty}",
-        )
+        capability_token = find_capability_token(db, x_capability_token)
+        if not capability_token:
+            raise HTTPException(status_code=401, detail="Invalid or consumed capability token")
 
-    # Step 4: Create the secret (may still fail on other validations)
+        # Check token expiry
+        now = datetime.now(UTC).replace(tzinfo=None)
+        if now >= capability_token.expires_at:
+            raise HTTPException(status_code=401, detail="Capability token expired")
+
+        # Validate file size against token tier
+        actual_ciphertext_size = len(base64.b64decode(secret_data.ciphertext))
+        if actual_ciphertext_size > capability_token.max_file_size_bytes:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ciphertext size {actual_ciphertext_size} exceeds token limit "
+                f"of {capability_token.max_file_size_bytes} bytes",
+            )
+
+        logger.info(
+            "capability_token_used",
+            token_id=capability_token.id,
+            tier=capability_token.tier,
+        )
+    else:
+        # Original PoW validation path
+        if not secret_data.pow_proof:
+            raise HTTPException(
+                status_code=400,
+                detail="Either pow_proof or X-Capability-Token header required",
+            )
+
+        # Step 1: Validate PoW (does NOT mark challenge as used yet)
+        try:
+            challenge = validate_pow(
+                db=db,
+                challenge_id=secret_data.pow_proof.challenge_id,
+                nonce=secret_data.pow_proof.nonce,
+                counter=secret_data.pow_proof.counter,
+                payload_hash=secret_data.pow_proof.payload_hash,
+            )
+        except ValueError as e:
+            logger.warning("pow_validation_failed", error=str(e))
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # Step 2: Verify payload hash matches actual ciphertext
+        # This prevents solving PoW for one payload and submitting another
+        computed_hash = compute_payload_hash(
+            secret_data.ciphertext,
+            secret_data.iv,
+            secret_data.auth_tag,
+        )
+        if computed_hash != secret_data.pow_proof.payload_hash:
+            logger.warning("payload_hash_mismatch")
+            raise HTTPException(
+                status_code=400,
+                detail="Payload hash mismatch - ciphertext doesn't match PoW proof",
+            )
+
+        # Step 3: Verify ciphertext size is within PoW limits
+        actual_ciphertext_size = len(base64.b64decode(secret_data.ciphertext))
+        if actual_ciphertext_size > settings.max_ciphertext_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Ciphertext size {actual_ciphertext_size} exceeds limit of "
+                f"{settings.max_ciphertext_size} bytes. Use a capability token for larger files.",
+            )
+
+        # Step 4: Verify difficulty is sufficient for actual payload size
+        # Allows "overpay" (solving harder challenge than needed) but rejects "underpay"
+        expected_difficulty = compute_expected_difficulty(actual_ciphertext_size)
+        if challenge.difficulty < expected_difficulty:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient PoW difficulty for payload size: "
+                f"got {challenge.difficulty}, need {expected_difficulty}",
+            )
+
+    # Step 5: Create the secret (may still fail on other validations)
     secret = create_secret(
         db=db,
         ciphertext_b64=secret_data.ciphertext,
@@ -103,15 +160,23 @@ async def create_new_secret(
         expires_at=secret_data.expires_at,
     )
 
-    # Step 5: Only NOW mark challenge as used (after all validations passed)
-    mark_challenge_used(db, challenge)
-
-    logger.info(
-        "secret_created",
-        secret_id=secret.id,
-        ciphertext_size=secret.ciphertext_size,
-        difficulty=challenge.difficulty,
-    )
+    # Step 6: Mark PoW challenge or capability token as consumed
+    if capability_token:
+        consume_capability_token(db, capability_token, secret.id)
+        logger.info(
+            "secret_created_with_token",
+            secret_id=secret.id,
+            ciphertext_size=secret.ciphertext_size,
+            tier=capability_token.tier,
+        )
+    else:
+        mark_challenge_used(db, challenge)
+        logger.info(
+            "secret_created",
+            secret_id=secret.id,
+            ciphertext_size=secret.ciphertext_size,
+            difficulty=challenge.difficulty,
+        )
 
     return SecretCreateResponse(
         secret_id=secret.id,
