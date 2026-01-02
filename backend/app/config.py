@@ -33,12 +33,7 @@ class Settings(BaseSettings):
     # CORS
     # Can be set as comma-separated string via environment variable
     # e.g., CORS_ORIGINS="https://ieomd.com,https://www.ieomd.com"
-    cors_origins: list[str] = [
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:5174",
-    ]
+    cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # Logging
     log_level: str = "INFO"  # DEBUG, INFO, WARNING, ERROR
