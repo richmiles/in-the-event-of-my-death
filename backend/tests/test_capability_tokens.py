@@ -133,6 +133,56 @@ class TestCapabilityTokenCreation:
         assert token.payment_provider == "lightning"
         assert token.payment_reference == "inv_123456"
 
+    def test_create_token_with_metadata(self, client, db_session):
+        """Test creating a token with metadata."""
+        test_metadata = {
+            "recipient_email": "beta@example.com",
+            "reason": "beta tester",
+            "campaign": "launch-2025",
+            "generated_by": "admin",
+        }
+
+        with patch.object(settings, "internal_api_key", "test-api-key"):
+            response = client.post(
+                "/api/v1/capability-tokens",
+                json={
+                    "tier": "basic",
+                    "payment_provider": "github-actions",
+                    "payment_reference": "run_12345",
+                    "token_metadata": test_metadata,
+                },
+                headers={"X-API-Key": "test-api-key"},
+            )
+
+        assert response.status_code == 201
+
+        # Verify metadata is in response
+        data = response.json()
+        assert data["token_metadata"] == test_metadata
+
+        # Verify metadata is stored in database
+        token = find_capability_token(db_session, data["token"])
+        assert token.token_metadata == test_metadata
+        assert token.token_metadata["recipient_email"] == "beta@example.com"
+        assert token.token_metadata["campaign"] == "launch-2025"
+
+    def test_create_token_without_metadata(self, client, db_session):
+        """Test creating a token without metadata (should be None)."""
+        with patch.object(settings, "internal_api_key", "test-api-key"):
+            response = client.post(
+                "/api/v1/capability-tokens",
+                json={"tier": "basic"},
+                headers={"X-API-Key": "test-api-key"},
+            )
+
+        assert response.status_code == 201
+
+        data = response.json()
+        assert data["token_metadata"] is None
+
+        token = find_capability_token(db_session, data["token"])
+        assert token.token_metadata is None
+
 
 class TestCapabilityTokenValidation:
     """Tests for capability token validation endpoint."""
@@ -473,3 +523,27 @@ class TestCapabilityTokenService:
         # Should not be findable anymore
         found = find_capability_token(db_session, raw_token)
         assert found is None
+
+    def test_create_token_with_metadata_service(self, db_session):
+        """Test creating a token with metadata via service function."""
+        token_metadata = {
+            "recipient_email": "test@example.com",
+            "reason": "promo",
+            "workflow_run": "12345",
+        }
+
+        token_model, raw_token = create_capability_token(
+            db_session,
+            tier="standard",
+            payment_provider="github-actions",
+            payment_reference="run_12345",
+            token_metadata=token_metadata,
+        )
+
+        assert token_model.token_metadata == token_metadata
+        assert token_model.token_metadata["recipient_email"] == "test@example.com"
+        assert token_model.payment_provider == "github-actions"
+
+        # Verify it persists after finding
+        found = find_capability_token(db_session, raw_token)
+        assert found.token_metadata == token_metadata

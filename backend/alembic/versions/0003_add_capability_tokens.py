@@ -41,6 +41,7 @@ def upgrade() -> None:
         ),
         sa.Column("payment_provider", sa.String(50), nullable=True),
         sa.Column("payment_reference", sa.String(255), nullable=True),
+        sa.Column("token_metadata", sa.JSON, nullable=True),
     )
 
     # Indexes

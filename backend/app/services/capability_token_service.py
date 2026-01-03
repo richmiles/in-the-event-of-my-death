@@ -25,6 +25,7 @@ def create_capability_token(
     tier: str,
     payment_provider: str | None = None,
     payment_reference: str | None = None,
+    token_metadata: dict | None = None,
 ) -> tuple[CapabilityToken, str]:
     """
     Create a new capability token.
@@ -51,6 +52,7 @@ def create_capability_token(
         expires_at=expires_at,
         payment_provider=payment_provider,
         payment_reference=payment_reference,
+        token_metadata=token_metadata,
     )
 
     db.add(token)

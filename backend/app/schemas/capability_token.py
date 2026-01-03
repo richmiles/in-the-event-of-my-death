@@ -9,6 +9,7 @@ class CapabilityTokenCreate(BaseModel):
     tier: str = Field(..., pattern="^(basic|standard|large)$")
     payment_provider: str | None = None
     payment_reference: str | None = None
+    token_metadata: dict | None = None
 
 
 class CapabilityTokenCreateResponse(BaseModel):
@@ -19,6 +20,7 @@ class CapabilityTokenCreateResponse(BaseModel):
     max_file_size_bytes: int
     max_expiry_days: int
     expires_at: UTCDateTime
+    token_metadata: dict | None = None
 
 
 class CapabilityTokenValidateResponse(BaseModel):

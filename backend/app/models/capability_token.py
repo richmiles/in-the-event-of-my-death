@@ -1,7 +1,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -52,3 +52,6 @@ class CapabilityToken(Base):
     # Payment tracking (for audit/reconciliation)
     payment_provider: Mapped[str | None] = mapped_column(String(50), nullable=True)
     payment_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+
+    # Flexible metadata for tracking (recipient info, campaign, etc.)
+    token_metadata: Mapped[dict | None] = mapped_column(JSON, nullable=True)

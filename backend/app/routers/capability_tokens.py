@@ -47,6 +47,7 @@ async def create_token(
             tier=token_data.tier,
             payment_provider=token_data.payment_provider,
             payment_reference=token_data.payment_reference,
+            token_metadata=token_data.token_metadata,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -64,6 +65,7 @@ async def create_token(
         max_file_size_bytes=token_model.max_file_size_bytes,
         max_expiry_days=token_model.max_expiry_days,
         expires_at=token_model.expires_at,
+        token_metadata=token_model.token_metadata,
     )
 
 
