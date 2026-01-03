@@ -34,12 +34,12 @@ export default function EditSecret() {
   const [state, setState] = useState<State>(() =>
     params.token ? { type: 'loading' } : { type: 'missing_params' },
   )
-  const [datePreset, setDatePreset] = useState<ExtendPreset>('+1m')
+  const [datePreset, setDatePreset] = useState<ExtendPreset>('none')
   const [customDate, setCustomDate] = useState('')
   const [customTime, setCustomTime] = useState('00:00')
 
   // Expiry date state
-  const [expiryPreset, setExpiryPreset] = useState<ExtendPreset>('+1y')
+  const [expiryPreset, setExpiryPreset] = useState<ExtendPreset>('none')
   const [customExpiryDate, setCustomExpiryDate] = useState('')
   const [customExpiryTime, setCustomExpiryTime] = useState('00:00')
 
@@ -252,6 +252,8 @@ export default function EditSecret() {
   const newExpiryDisplay = formatDateForDisplay(newExpiryDate)
   const currentExpiryDisplay = formatDateForDisplay(state.currentExpiresAt)
   const isValid =
+    datePreset !== 'none' &&
+    expiryPreset !== 'none' &&
     (datePreset !== 'custom' || (customDate && customTime)) &&
     (expiryPreset !== 'custom' || (customExpiryDate && customExpiryTime))
 
@@ -308,10 +310,14 @@ export default function EditSecret() {
           </button>
         </div>
 
-        {newUnlockDisplay && (
-          <p className="unlock-preview">
-            New unlock: {newUnlockDisplay.date} at {newUnlockDisplay.time}
-          </p>
+        {datePreset === 'none' ? (
+          <p className="field-hint">Select an extension to preview the new date</p>
+        ) : (
+          newUnlockDisplay && (
+            <p className="date-preview">
+              New unlock: {newUnlockDisplay.date} at {newUnlockDisplay.time}
+            </p>
+          )
         )}
 
         {datePreset === 'custom' && (
@@ -375,10 +381,14 @@ export default function EditSecret() {
           </button>
         </div>
 
-        {newExpiryDisplay && (
-          <p className="unlock-preview">
-            New expiry: {newExpiryDisplay.date} at {newExpiryDisplay.time}
-          </p>
+        {expiryPreset === 'none' ? (
+          <p className="field-hint">Select an extension to preview the new date</p>
+        ) : (
+          newExpiryDisplay && (
+            <p className="date-preview">
+              New expiry: {newExpiryDisplay.date} at {newExpiryDisplay.time}
+            </p>
+          )
         )}
 
         {expiryPreset === 'custom' && (
