@@ -485,8 +485,8 @@ class TestValidation:
         assert response.status_code == 422
         assert "16 bytes" in str(response.json())
 
-    def test_unlock_date_too_soon(self, client):
-        """Test that unlock date must be at least 5 minutes in future."""
+    def test_unlock_date_in_past(self, client):
+        """Test that unlock date cannot be in the past."""
         test_data = generate_test_data()
         payload_hash = "a" * 64
 
@@ -496,7 +496,7 @@ class TestValidation:
         )
         challenge = challenge_response.json()
 
-        unlock_at = utcnow() + timedelta(minutes=1)  # Too soon
+        unlock_at = utcnow() - timedelta(hours=1)  # In the past
         expires_at = utcnow() + timedelta(days=7)
         response = client.post(
             "/api/v1/secrets",
@@ -518,7 +518,7 @@ class TestValidation:
         )
 
         assert response.status_code == 422
-        assert "5 minutes" in str(response.json())
+        assert "future" in str(response.json()).lower() or "0 minutes" in str(response.json())
 
 
 class TestPowHardening:
@@ -640,8 +640,8 @@ class TestPowHardening:
         challenge = challenge_response.json()
         counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
 
-        # Try to create secret with invalid unlock date (too soon)
-        unlock_at = utcnow() + timedelta(minutes=1)  # Invalid - too soon
+        # Try to create secret with invalid unlock date (in the past)
+        unlock_at = utcnow() - timedelta(hours=1)  # Invalid - in the past
         expires_at = utcnow() + timedelta(days=7)
         first_response = client.post(
             "/api/v1/secrets",

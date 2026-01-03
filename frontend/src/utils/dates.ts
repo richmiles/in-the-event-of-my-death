@@ -7,7 +7,10 @@ export const MIN_EXPIRY_GAP_MS = 15 * 60 * 1000 // 15 minutes
 export const MAX_EXPIRY_MS = 5 * 365 * 24 * 60 * 60 * 1000 // ~5 years
 
 // Preset types for date selection
-export type DatePreset = '1w' | '1m' | '1y' | 'custom'
+export type UnlockPreset = 'now' | 'custom'
+export type ExpiryPreset = '15m' | '1h' | '24h' | '1w' | 'custom'
+// Legacy presets for backwards compatibility
+export type DatePreset = 'now' | '15m' | '1h' | '24h' | '1w' | '1m' | '1y' | 'custom'
 export type ExtendPreset = '+1w' | '+1m' | '+1y' | 'custom'
 
 export interface CustomDateInput {
@@ -28,6 +31,14 @@ export function applyDateOffset(
   const normalizedPreset = preset.startsWith('+') ? preset.slice(1) : preset
 
   switch (normalizedPreset) {
+    case 'now':
+      return new Date(baseDate.getTime())
+    case '15m':
+      return new Date(baseDate.getTime() + 15 * 60 * 1000)
+    case '1h':
+      return new Date(baseDate.getTime() + 60 * 60 * 1000)
+    case '24h':
+      return new Date(baseDate.getTime() + 24 * 60 * 60 * 1000)
     case '1w':
       return new Date(baseDate.getTime() + 7 * 24 * 60 * 60 * 1000)
     case '1m': {
