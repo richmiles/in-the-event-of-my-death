@@ -1,4 +1,4 @@
-.PHONY: install backend frontend dev test migrate lint format format-check typecheck check hooks help
+.PHONY: install backend backend-server frontend dev test migrate lint format format-check typecheck check hooks help
 
 # Port configuration (override with environment variables for parallel worktrees)
 BACKEND_PORT ?= 8000
@@ -9,22 +9,25 @@ help:
 	@echo "  make install   - Install all dependencies"
 	@echo "  make backend   - Run the backend server"
 	@echo "  make frontend  - Run the frontend dev server"
-	@echo "  make dev       - Run both backend and frontend"
-	@echo "  make test      - Run backend tests"
+	@echo "  make dev       - Run both backend and frontend (with migrations)"
+	@echo "  make test      - Run all tests (backend + frontend)"
 	@echo "  make lint      - Run lint checks"
 	@echo "  make format    - Auto-format code"
 	@echo "  make typecheck - Run TypeScript type checking"
-	@echo "  make check     - Run lint, typecheck, and tests"
+	@echo "  make check     - Run lint, format-check, typecheck, and tests"
 	@echo "  make hooks     - Install git hooks"
 	@echo "  make migrate   - Run database migrations"
 
 install:
 	cd backend && poetry install
 	cd frontend && npm install
-	@make hooks
+	@$(MAKE) hooks
 
-backend: migrate
+# backend-server: internal target without migrate (called by dev after migrate runs once)
+backend-server:
 	cd backend && poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port $(BACKEND_PORT)
+
+backend: migrate backend-server
 
 frontend:
 	cd frontend && npm run dev -- --port $(FRONTEND_PORT)
@@ -34,7 +37,7 @@ dev: migrate
 	@echo "Backend: http://localhost:$(BACKEND_PORT)"
 	@echo "Frontend: http://localhost:$(FRONTEND_PORT)"
 	@echo ""
-	@make -j2 backend frontend
+	@$(MAKE) -j2 backend-server frontend
 
 test:
 	cd backend && poetry run pytest tests/ -v
