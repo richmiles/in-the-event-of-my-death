@@ -32,7 +32,7 @@ jobs:
           backend="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-backend:${{ inputs.tag }}"
           web="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-web:${{ inputs.tag }}"
           ssh -o BatchMode=yes -o ConnectTimeout=10 "${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}" \
-            "sudo /usr/local/bin/ieomd-deploy deploy --dir /opt/ieomd --backend-image ${backend} --web-image ${web}"
+            "INTERNAL_API_KEY='${{ secrets.INTERNAL_API_KEY }}' sudo -E /usr/local/bin/ieomd-deploy deploy --dir /opt/ieomd --backend-image ${backend} --web-image ${web}"
 
       - name: Smoke test
         run: |
