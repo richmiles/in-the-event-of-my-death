@@ -11,7 +11,7 @@ export type UnlockPreset = 'now' | '15m' | '1h' | '24h' | '1w' | 'custom'
 export type ExpiryPreset = '15m' | '1h' | '24h' | '1w' | 'custom'
 // Legacy presets for backwards compatibility
 export type DatePreset = 'now' | '15m' | '1h' | '24h' | '1w' | '1m' | '1y' | 'custom'
-export type ExtendPreset = '+1w' | '+1m' | '+1y' | 'custom'
+export type ExtendPreset = 'none' | '+1w' | '+1m' | '+1y' | 'custom'
 
 export interface CustomDateInput {
   date: string
