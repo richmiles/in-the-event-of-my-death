@@ -262,23 +262,9 @@ export default function Home() {
           )}
 
           <div className="links-section">
-            <div className="link-box">
-              <h3>Edit Link (keep this private)</h3>
-              <p className="link-description">Use this link to extend the unlock date.</p>
-              <div className="link-container">
-                <input type="text" value={links.editLink} readOnly />
-                <button
-                  onClick={() => copyToClipboard(links.editLink, 'edit')}
-                  className="copy-button"
-                >
-                  {copied === 'edit' ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-            </div>
-
-            <div className="link-box">
-              <h3>View Link (share with recipient)</h3>
-              <p className="link-description">Share this with who should receive your secret.</p>
+            <div className="link-box primary">
+              <h3>Share Link</h3>
+              <p className="link-description">Send this to who should receive your secret.</p>
               <div className="link-container">
                 <input type="text" value={links.viewLink} readOnly />
                 <button
@@ -286,6 +272,20 @@ export default function Home() {
                   className="copy-button"
                 >
                   {copied === 'view' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+            </div>
+
+            <div className="link-box secondary">
+              <h3>Edit Link (keep private)</h3>
+              <p className="link-description">Use this to extend the unlock date. Do not share.</p>
+              <div className="link-container">
+                <input type="text" value={links.editLink} readOnly />
+                <button
+                  onClick={() => copyToClipboard(links.editLink, 'edit')}
+                  className="copy-button"
+                >
+                  {copied === 'edit' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
             </div>
