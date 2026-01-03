@@ -314,7 +314,7 @@ export default function EditSecret() {
           <p className="field-hint">Select an extension to preview the new date</p>
         ) : (
           newUnlockDisplay && (
-            <p className="unlock-preview">
+            <p className="date-preview">
               New unlock: {newUnlockDisplay.date} at {newUnlockDisplay.time}
             </p>
           )
@@ -385,7 +385,7 @@ export default function EditSecret() {
           <p className="field-hint">Select an extension to preview the new date</p>
         ) : (
           newExpiryDisplay && (
-            <p className="unlock-preview">
+            <p className="date-preview">
               New expiry: {newExpiryDisplay.date} at {newExpiryDisplay.time}
             </p>
           )

@@ -394,8 +394,8 @@ textarea::placeholder {
   border-color: var(--accent-primary);
 }
 
-/* Unlock date preview */
-.unlock-preview {
+/* Date preview (unlock/expiry) */
+.date-preview {
   font-size: 0.75rem;
   color: var(--text-secondary);
   margin: 0.75rem 0 0;
