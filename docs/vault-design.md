@@ -4,7 +4,7 @@ This document outlines the design for a **capability-based identity system** tha
 
 > **Status:** Draft – Open for iteration
 > **Issue:** [#157](https://github.com/richmiles/in-the-event-of-my-death/issues/157)
-> **Project:** [v0.4 - Vault & Capability Identity](https://github.com/users/richmiles/projects/13)
+> **Project:** [IEOMD v0.4 - Vault & Capability Identity](https://github.com/users/richmiles/projects/13)
 
 ---
 
@@ -27,6 +27,12 @@ Enable secret tracking and multi-device access while maintaining zero-knowledge 
 
 The identity model is **capability-based**: possession of a `vaultKey` is the "account." No email, no password, no identity verification—just a secret you control.
 
+### Non-Goals / Explicit Tradeoffs
+
+- **No account recovery:** There is no "forgot password" or email-based recovery. If you lose the `vaultKey` (and recovery kit), the vault is unrecoverable by design.
+- **No server-side visibility:** The server never needs access to plaintext, encryption keys, or a queryable index of vault contents.
+- **No cryptographic protection from XSS:** If attacker-controlled JavaScript runs in-origin, it can exfiltrate or misuse the `vaultKey`. This design assumes XSS prevention is mandatory.
+
 ---
 
 ## 2. Terminology
@@ -35,8 +41,10 @@ The identity model is **capability-based**: possession of a `vaultKey` is the "a
 |------|------------|
 | **vaultKey** | Random 256-bit key generated on first use, stored client-side |
 | **vaultId** | `SHA-256(vaultKey)` – identifies the vault on server (not reversible) |
-| **syncToken** | Bearer token for write operations (prevents unauthorized overwrites) |
+| **vaultBlob** | Single encrypted payload containing all vault state (entries, metadata, syncToken, etc.) |
+| **syncToken** | Bearer token for write operations; server stores only a hash of it |
 | **Recovery Kit** | Exported vaultKey for backup (file, QR, or mnemonic) |
+| **ETag** | Server-provided version identifier for optimistic concurrency |
 
 ---
 
@@ -49,13 +57,14 @@ The identity model is **capability-based**: possession of a `vaultKey` is the "a
 - **VR5:** Provide recovery kit export/import for backup
 - **VR6:** Display dashboard of tracked secrets with status
 - **VR7:** Server must never have access to vault contents or vaultKey
+- **VR8:** The `vaultKey` (and per-secret decryption keys) must never be transmitted to the server (including via query params); any key-in-link transfer must use the URL fragment only.
 
 ---
 
 ## 4. Non-Functional Requirements
 
-- **Security:** All vault contents encrypted with keys derived from vaultKey
-- **Privacy:** Server stores only opaque ciphertext; no metadata leakage
+- **Security:** All vault contents are encrypted client-side with keys derived from `vaultKey` (AEAD)
+- **Privacy:** Server stores only opaque ciphertext; minimize metadata leakage (sizes/timestamps are unavoidable)
 - **Reliability:** Conflict resolution for concurrent edits
 - **Usability:** Clear UX for pairing, recovery, and status tracking
 - **Offline-first:** Local vault works without connectivity
@@ -69,17 +78,15 @@ The identity model is **capability-based**: possession of a `vaultKey` is the "a
 ```
 vaultKey (256-bit random)
     │
-    ├─► HKDF(vaultKey, "enc") ──► encKey (AES-256-GCM encryption)
-    │
-    ├─► HKDF(vaultKey, "mac") ──► macKey (HMAC integrity)
+    ├─► HKDF(vaultKey, "vault:aead:v1") ──► vaultAeadKey (AES-256-GCM)
     │
     └─► SHA-256(vaultKey) ──────► vaultId (server identifier)
 ```
 
 - **Key derivation:** HKDF (RFC 5869) to derive purpose-specific keys
-- **Encryption:** AES-256-GCM for authenticated encryption
-- **Integrity:** HMAC for additional integrity verification
+- **Encryption:** AES-256-GCM (AEAD) for authenticated encryption
 - **Identifier:** SHA-256 hash ensures server cannot reverse to vaultKey
+- **AAD binding:** Include `vaultId` + schema version as additional authenticated data to prevent cross-vault blob substitution
 
 ### 5.2 Storage
 
@@ -96,7 +103,7 @@ interface VaultEntry {
   secretId: string           // Server-side secret ID
   editToken: string          // Capability token for editing
   viewToken?: string         // Optional: stored for reference
-  encryptionKey: string      // The secret's encryption key
+  encryptionKey: string      // Secret decryption key (from URL fragment; never sent to server)
   createdAt: string          // ISO timestamp
   unlockAt: string           // When secret unlocks
   expiresAt: string          // When secret expires
@@ -107,6 +114,7 @@ interface VaultEntry {
 
 interface Vault {
   version: number
+  syncToken: string
   entries: VaultEntry[]
   createdAt: string
   lastModified: string
@@ -116,74 +124,91 @@ interface Vault {
 #### Server-Side
 
 - **Storage:** Encrypted blob keyed by vaultId
-- **Access control:** syncToken required for writes
+- **Access control:** `syncToken` required for writes (server stores only `SHA-256(syncToken)`)
 - **Versioning:** ETags for conflict detection
-- **No metadata:** Server stores only opaque ciphertext
+- **Minimize metadata:** Server stores only opaque ciphertext (plus required control fields)
 
 ```
-POST /api/vault/{vaultId}
+GET /api/vault/{vaultId}
+200 OK
+ETag: "{etag}"
+Body: { ciphertext: "..." }
+
+PUT /api/vault/{vaultId}
 Authorization: Bearer {syncToken}
 If-Match: {etag}
 Body: { ciphertext: "..." }
 ```
 
+**Creation semantics (recommended):**
+- First write uses `If-None-Match: *` to avoid accidental overwrite.
+- If the vault already exists, client should treat it as "vault already registered" and proceed with normal sync (or prompt user if it expected a new vault).
+
 ### 5.3 Sync Protocol
 
 1. **Pull:** Client fetches encrypted blob by vaultId
-2. **Decrypt:** Client decrypts with encKey derived from vaultKey
-3. **Merge:** Client merges with local state (conflict resolution TBD)
+2. **Decrypt:** Client decrypts with `vaultAeadKey` derived from vaultKey
+3. **Merge:** Client merges with local state (see Conflict Resolution notes)
 4. **Encrypt:** Client encrypts merged state
 5. **Push:** Client uploads with syncToken and If-Match header
+
+**Conflict resolution (suggested starting point):**
+- Treat the vault as a single-writer-most-of-the-time document, but support multi-device edits.
+- Start with an **entry-level merge** keyed by `secretId`, using `lastModified` per entry and a vault-level `lastModified` for UX.
+- When conflicts cannot be merged safely (e.g., two different labels edited concurrently), surface a UI conflict prompt rather than silently losing data.
 
 ---
 
 ## 6. Device Pairing
 
-### Option A: Short-Code Session (Recommended)
+**Goal:** Copy `vaultKey` to another device without introducing accounts.
 
-Most secure option—vaultKey never appears in a URL.
+**Important security note:** Any server-mediated key exchange must be **authenticated**. Otherwise, a malicious (or compromised) server can man-in-the-middle the exchange and learn the `vaultKey`.
 
-**Flow:**
-1. Device A initiates pairing, receives session ID from server
-2. Device A displays 6-digit code (valid 5 minutes)
-3. Device B enters code
-4. Server facilitates ephemeral key exchange (e.g., X25519)
-5. Device A encrypts vaultKey with shared secret, sends via server
-6. Device B decrypts vaultKey
-7. Session destroyed
+### Option A: QR Code (Recommended for v1)
 
-**Security properties:**
-- vaultKey never in URL or logs
-- Time-limited (replay window minimized)
-- Requires physical proximity or real-time communication
-
-### Option B: Password-Wrapped Link
-
-Simpler but riskier.
+Good for in-person pairing and avoids server involvement.
 
 **Flow:**
-1. Device A generates link with encrypted vaultKey in fragment
-2. Encryption uses password provided by user
-3. Device B opens link, enters password
-4. vaultKey decrypted client-side
-
-**Risks:**
-- URL may appear in browser history, logs
-- Password strength varies
-
-### Option C: QR Code
-
-Good for in-person pairing.
-
-**Flow:**
-1. Device A displays QR containing vaultKey (or encrypted key)
+1. Device A displays QR containing `vaultKey` (or password-wrapped `vaultKey`)
 2. Device B scans with camera
-3. vaultKey transferred directly
+3. Device B stores `vaultKey` and syncs vault from server
 
 **Tradeoffs:**
 - Works offline
 - Requires camera access
 - In-person only
+
+### Option B: Password-Wrapped Link (Remote-friendly)
+
+Simpler to ship and works when devices aren't co-located.
+
+**Flow:**
+1. Device A generates a link containing an **encrypted** `vaultKey` in the URL fragment
+2. User shares the link to themselves (e.g., notes app) and communicates the password out-of-band
+3. Device B opens link, enters password, decrypts `vaultKey` client-side
+
+**Risks / mitigations:**
+- Fragments are not sent to the server, but URLs can appear in browser history and be copied around; keep TTL short and show clear warnings.
+- Use a strong KDF for password-wrapping (and include a random salt).
+
+### Option C: Short-Code Pairing Session (v2+)
+
+Most secure server-mediated option, but only if the exchange is authenticated (e.g., SAS confirmation or QR-based key pinning).
+
+**Flow:**
+1. Device A initiates pairing, receives session ID from server
+2. Device A displays 6-digit code (valid 5 minutes)
+3. Device B enters code
+4. Devices perform an authenticated key exchange via server relay (e.g., X25519 + SAS user confirmation)
+5. Device A encrypts `vaultKey` with the shared secret, sends via server
+6. Device B decrypts `vaultKey`
+7. Session destroyed
+
+**Security properties:**
+- vaultKey never in URL
+- Time-limited (replay window minimized)
+- Requires physical proximity or real-time communication
 
 ---
 
@@ -218,9 +243,10 @@ If an attacker can execute JavaScript on the page, they can exfiltrate the vault
 
 **Mitigations:**
 - Strict Content Security Policy (no inline scripts, no eval)
+- Trusted Types (where supported)
 - Minimal third-party scripts
 - Regular security audits
-- Consider Web Worker for key operations (harder to exfiltrate)
+- Prefer isolating crypto operations (and key handling) behind a small, well-audited surface; Web Workers can reduce accidental exposure but do not meaningfully protect against true XSS.
 
 ### 8.2 DoS via Ciphertext Clobbering
 
@@ -241,7 +267,7 @@ vaultId is SHA-256(vaultKey)—computationally infeasible to enumerate.
 Even if server is compromised:
 - Attacker gets encrypted blobs only
 - Cannot decrypt without vaultKey
-- Cannot determine which vaultIds are active
+- Can observe vaultIds, blob sizes, timestamps, and access patterns (minimize logs/retention to reduce correlatability)
 
 ---
 
@@ -290,9 +316,9 @@ Display list of tracked secrets with:
 ### 9.4 Add Device
 
 ```
-Device A: Settings → "Add Device" → Display 6-digit code
+Device A: Settings → "Add Device" → Choose method (QR / link / session code)
     │
-Device B: Settings → "Link Device" → Enter code
+Device B: Settings → "Link Device" → Scan / open link / enter code
     │
     ▼
 Key exchange completes
@@ -333,10 +359,12 @@ Device B syncs vault from server
 - syncToken + ETag conflict handling
 
 ### Phase 3: Device Pairing
-- Short-code pairing flow
+- QR-based pairing (in-person)
+- Password-wrapped link (remote-friendly)
 - Recovery kit export/import
 
 ### Phase 4: Polish
+- Authenticated short-code pairing session (if needed)
 - Conflict resolution UI
 - Offline queue for changes
 - Status polling for secrets
@@ -359,6 +387,7 @@ Device B syncs vault from server
 | Date | Author | Changes |
 |------|--------|---------|
 | 2025-01-03 | Claude + Rich | Initial draft from design discussion |
+| 2026-01-03 | Codex | Clarify crypto, pairing security model, and sync semantics |
 
 ---
 
@@ -366,7 +395,7 @@ Device B syncs vault from server
 
 This document is a living design. Key areas for feedback:
 
-- [ ] Pairing mechanism preference (short-code vs. alternatives)
+- [ ] Pairing mechanism preference (QR vs. password link vs. authenticated short-code)
 - [ ] Conflict resolution strategy
 - [ ] Recovery kit format (file vs. QR vs. mnemonic)
 - [ ] Premium feature boundaries
