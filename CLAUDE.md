@@ -74,10 +74,11 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
 
 3. **Create a worktree for the issue**
    ```bash
-   git worktree add ../ieomd-<issue-number> -b feature/<issue-number>-<description>
+   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<description>
    cd ../ieomd-<issue-number>
    ```
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
+   - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
    - This enables parallel work on multiple issues and keeps each task isolated
 
 **If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
@@ -112,7 +113,7 @@ Clean up the worktree and branch:
 ```bash
 cd /path/to/main/repo
 git worktree remove ../ieomd-<issue-number>
-git branch -d feature/<issue-number>-<description>
+git branch -d <type>/<issue-number>-<description>
 git worktree prune
 ```
 
@@ -138,8 +139,8 @@ When working on multiple issues in parallel, each worktree needs different ports
 | Worktree | Frontend | Backend | Command |
 |----------|----------|---------|---------|
 | First | 5173 | 8000 | `make dev` |
-| Second | 5174 | 8001 | `VITE_PORT=5174 BACKEND_PORT=8001 make dev` |
-| Third | 5175 | 8002 | `VITE_PORT=5175 BACKEND_PORT=8002 make dev` |
+| Second | 5174 | 8001 | `FRONTEND_PORT=5174 BACKEND_PORT=8001 make dev` |
+| Third | 5175 | 8002 | `FRONTEND_PORT=5175 BACKEND_PORT=8002 make dev` |
 
 ## Parallel Work Guidelines
 

@@ -1,5 +1,9 @@
 .PHONY: install backend frontend dev test migrate lint format format-check typecheck check hooks help
 
+# Port configuration (override with environment variables for parallel worktrees)
+BACKEND_PORT ?= 8000
+FRONTEND_PORT ?= 5173
+
 help:
 	@echo "Available commands:"
 	@echo "  make install   - Install all dependencies"
@@ -20,15 +24,15 @@ install:
 	@make hooks
 
 backend: migrate
-	cd backend && poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	cd backend && poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port $(BACKEND_PORT)
 
 frontend:
-	cd frontend && npm run dev
+	cd frontend && npm run dev -- --port $(FRONTEND_PORT)
 
 dev: migrate
 	@echo "Starting backend and frontend..."
-	@echo "Backend: http://localhost:8000"
-	@echo "Frontend: http://localhost:5173"
+	@echo "Backend: http://localhost:$(BACKEND_PORT)"
+	@echo "Frontend: http://localhost:$(FRONTEND_PORT)"
 	@echo ""
 	@make -j2 backend frontend
 
