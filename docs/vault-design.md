@@ -144,6 +144,25 @@ Body: { ciphertext: "..." }
 - First write uses `If-None-Match: *` to avoid accidental overwrite.
 - If the vault already exists, client should treat it as "vault already registered" and proceed with normal sync (or prompt user if it expected a new vault).
 
+**Bootstrap flow (first vault creation):**
+1. Client generates `vaultKey` (256-bit random)
+2. Client generates `syncToken` (256-bit random)
+3. Client creates initial `Vault` object with `syncToken` inside
+4. Client encrypts vault → `vaultBlob`
+5. Client sends first write:
+   ```
+   PUT /api/vault/{vaultId}
+   Authorization: Bearer {syncToken}
+   If-None-Match: *
+   Body: { ciphertext: "..." }
+   ```
+6. Server stores: `vaultId`, `ciphertext`, `etag`, `syncTokenHash = SHA-256(syncToken)`
+
+**Why syncToken is inside the encrypted blob:**
+- Paired devices need the `syncToken` to write
+- Including it in the encrypted vault means new devices get it automatically on sync
+- Server only stores the hash, so compromise doesn't expose the raw token
+
 ### 5.3 Sync Protocol
 
 1. **Pull:** Client fetches encrypted blob by vaultId
@@ -388,6 +407,7 @@ Device B syncs vault from server
 |------|--------|---------|
 | 2025-01-03 | Claude + Rich | Initial draft from design discussion |
 | 2026-01-03 | Codex | Clarify crypto, pairing security model, and sync semantics |
+| 2026-01-03 | Claude | Add syncToken bootstrap flow based on Codex clarification |
 
 ---
 
