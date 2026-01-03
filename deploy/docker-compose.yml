@@ -5,6 +5,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:-sqlite:////data/secrets.db}
       CORS_ORIGINS: ${CORS_ORIGINS:-https://$SITE_HOST}
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-}
     volumes:
       - ${DATA_DIR:-/var/lib/ieomd}:/data
 
