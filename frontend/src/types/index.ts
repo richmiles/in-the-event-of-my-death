@@ -69,3 +69,17 @@ export interface ShareableLinks {
   editLink: string
   viewLink: string
 }
+
+export type VaultEntryStatus = 'pending' | 'unlocked' | 'retrieved' | 'expired'
+
+export interface VaultEntry {
+  secretId: string
+  editToken: string
+  createdAt: string
+  unlockAt: string
+  expiresAt: string
+  label?: string
+  recipientHint?: string
+  status?: VaultEntryStatus
+  lastCheckedAt?: string
+}

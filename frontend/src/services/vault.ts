@@ -1,0 +1,178 @@
+import type { VaultEntry } from '../types'
+
+import { bytesToBase64 } from './crypto'
+
+const DB_NAME = 'ieomd-vault'
+const DB_VERSION = 1
+
+const STORE_META = 'meta'
+const STORE_ENTRIES = 'entries'
+
+const VAULT_KEY_META_KEY = 'vaultKey'
+
+type VaultMetaRecord = { key: string; value: string }
+
+function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('IndexedDB request failed'))
+  })
+}
+
+function transactionDone(transaction: IDBTransaction): Promise<void> {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = () =>
+      reject(transaction.error ?? new Error('IndexedDB transaction aborted'))
+    transaction.onerror = () =>
+      reject(transaction.error ?? new Error('IndexedDB transaction failed'))
+  })
+}
+
+function openVaultDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION)
+
+    request.onupgradeneeded = () => {
+      const db = request.result
+
+      if (!db.objectStoreNames.contains(STORE_META)) {
+        db.createObjectStore(STORE_META, { keyPath: 'key' })
+      }
+
+      if (!db.objectStoreNames.contains(STORE_ENTRIES)) {
+        db.createObjectStore(STORE_ENTRIES, { keyPath: 'secretId' })
+      }
+    }
+
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error ?? new Error('Failed to open vault database'))
+  })
+}
+
+async function withDb<T>(fn: (db: IDBDatabase) => Promise<T>): Promise<T> {
+  const db = await openVaultDb()
+  try {
+    return await fn(db)
+  } finally {
+    db.close()
+  }
+}
+
+async function getMetaValue(db: IDBDatabase, key: string): Promise<string | null> {
+  const tx = db.transaction(STORE_META, 'readonly')
+  const store = tx.objectStore(STORE_META)
+  const record = await requestToPromise(store.get(key) as IDBRequest<VaultMetaRecord | undefined>)
+  await transactionDone(tx)
+  return record?.value ?? null
+}
+
+async function setMetaValue(db: IDBDatabase, key: string, value: string): Promise<void> {
+  const tx = db.transaction(STORE_META, 'readwrite')
+  const store = tx.objectStore(STORE_META)
+  await requestToPromise(store.put({ key, value } satisfies VaultMetaRecord))
+  await transactionDone(tx)
+}
+
+function generateVaultKeyBase64(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  return bytesToBase64(bytes)
+}
+
+export async function initVault(): Promise<{ vaultKey: string }> {
+  return withDb(async (db) => {
+    const existing = await getMetaValue(db, VAULT_KEY_META_KEY)
+    if (existing) {
+      return { vaultKey: existing }
+    }
+
+    const vaultKey = generateVaultKeyBase64()
+    await setMetaValue(db, VAULT_KEY_META_KEY, vaultKey)
+
+    return { vaultKey }
+  })
+}
+
+export async function hasVault(): Promise<boolean> {
+  if (typeof indexedDB.databases === 'function') {
+    const databases = await indexedDB.databases()
+    return databases.some((db) => db.name === DB_NAME)
+  }
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME)
+    let shouldResolveFalse = false
+
+    request.onupgradeneeded = (event) => {
+      const oldVersion = event.oldVersion
+      if (oldVersion === 0) {
+        shouldResolveFalse = true
+        request.transaction?.abort()
+      }
+    }
+
+    request.onsuccess = () => {
+      const db = request.result
+      db.close()
+      resolve(true)
+    }
+
+    request.onerror = () => {
+      if (shouldResolveFalse && request.error?.name === 'AbortError') {
+        resolve(false)
+        return
+      }
+      reject(request.error ?? new Error('Failed to check vault existence'))
+    }
+  })
+}
+
+export async function addEntry(entry: VaultEntry): Promise<void> {
+  return withDb(async (db) => {
+    const tx = db.transaction(STORE_ENTRIES, 'readwrite')
+    const store = tx.objectStore(STORE_ENTRIES)
+    await requestToPromise(store.add(entry))
+    await transactionDone(tx)
+  })
+}
+
+export async function getEntries(): Promise<VaultEntry[]> {
+  return withDb(async (db) => {
+    const tx = db.transaction(STORE_ENTRIES, 'readonly')
+    const store = tx.objectStore(STORE_ENTRIES)
+    const entries = await requestToPromise(store.getAll())
+    await transactionDone(tx)
+    return entries
+  })
+}
+
+export async function updateEntry(
+  secretId: string,
+  updates: Partial<Omit<VaultEntry, 'secretId'>>,
+): Promise<VaultEntry> {
+  return withDb(async (db) => {
+    const tx = db.transaction(STORE_ENTRIES, 'readwrite')
+    const store = tx.objectStore(STORE_ENTRIES)
+
+    const existing = await requestToPromise(
+      store.get(secretId) as IDBRequest<VaultEntry | undefined>,
+    )
+    if (!existing) {
+      throw new Error(`Vault entry not found: ${secretId}`)
+    }
+
+    const updated: VaultEntry = { ...existing, ...updates, secretId }
+    await requestToPromise(store.put(updated))
+    await transactionDone(tx)
+    return updated
+  })
+}
+
+export async function deleteEntry(secretId: string): Promise<void> {
+  return withDb(async (db) => {
+    const tx = db.transaction(STORE_ENTRIES, 'readwrite')
+    const store = tx.objectStore(STORE_ENTRIES)
+    await requestToPromise(store.delete(secretId))
+    await transactionDone(tx)
+  })
+}
