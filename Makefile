@@ -1,6 +1,7 @@
 .PHONY: install backend backend-server frontend dev test migrate lint format format-check typecheck check hooks help
 
-# Port configuration (override with environment variables for parallel worktrees)
+# Server configuration (override with environment variables for parallel worktrees)
+BACKEND_HOST ?= 127.0.0.1
 BACKEND_PORT ?= 8000
 FRONTEND_PORT ?= 5173
 
@@ -25,7 +26,7 @@ install:
 
 # backend-server: internal target without migrate (called by dev after migrate runs once)
 backend-server:
-	cd backend && poetry run uvicorn app.main:app --reload --host 0.0.0.0 --port $(BACKEND_PORT)
+	cd backend && poetry run uvicorn app.main:app --reload --host $(BACKEND_HOST) --port $(BACKEND_PORT)
 
 backend: migrate backend-server
 

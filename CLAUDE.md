@@ -74,7 +74,7 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
 
 3. **Create a worktree for the issue**
    ```bash
-   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<description>
+   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description>
    cd ../ieomd-<issue-number>
    ```
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
@@ -113,7 +113,7 @@ Clean up the worktree and branch:
 ```bash
 cd /path/to/main/repo
 git worktree remove ../ieomd-<issue-number>
-git branch -d <type>/<issue-number>-<description>
+git branch -d <type>/<issue-number>-<short-description>
 git worktree prune
 ```
 
@@ -155,3 +155,5 @@ Multiple issues can be worked simultaneously when they touch independent parts o
 - Issues that modify the same files
 - Tasks that depend on each other's changes
 - Changes to shared config (package.json, pyproject.toml, Makefile)
+
+**Note:** Each worktree has its own SQLite database (relative path `sqlite:///./secrets.db`), so parallel worktrees won't conflict on data.

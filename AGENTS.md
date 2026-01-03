@@ -21,7 +21,7 @@ This repo is a small monorepo:
 
 3. **Create a worktree for the issue**
    ```bash
-   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<description>
+   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description>
    cd ../ieomd-<issue-number>
    ```
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
@@ -65,7 +65,7 @@ Clean up the worktree and branch:
 ```bash
 cd /path/to/main/repo
 git worktree remove ../ieomd-<issue-number>
-git branch -d <type>/<issue-number>-<description>
+git branch -d <type>/<issue-number>-<short-description>
 git worktree prune
 ```
 
@@ -111,3 +111,5 @@ Multiple issues can be worked simultaneously when they touch independent parts o
 - **Check for conflicts before starting** - Review which files each issue will touch
 - **Merge sequentially** - Don't merge PRs simultaneously; let CI run between merges
 - **Rebase after conflicts** - If main updates, rebase your branch before continuing
+
+**Note:** Each worktree has its own SQLite database (relative path `sqlite:///./secrets.db`), so parallel worktrees won't conflict on data.
