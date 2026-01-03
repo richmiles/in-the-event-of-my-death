@@ -74,12 +74,16 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
 
 3. **Create a worktree for the issue**
    ```bash
-   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description>
+   git fetch origin
+   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description> origin/main
    cd ../ieomd-<issue-number>
    ```
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
    - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
-   - This enables parallel work on multiple issues and keeps each task isolated
+   - This is required for ALL work (including small docs changes), not just parallel work
+   - All work must be done inside the issue worktree (not the main checkout)
+   - If the branch already exists, create a worktree from it: `git worktree add ../ieomd-<issue-number> <branch-name>`
+   - If already in the correct issue worktree, proceed without creating a new one
 
 **If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
 
