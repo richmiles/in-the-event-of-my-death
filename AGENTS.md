@@ -19,10 +19,14 @@ This repo is a small monorepo:
      - **#11** - IEOMD - UX Enhancements (link ordering, defaults, sharing)
      - **#12** - IEOMD - Infrastructure (ongoing DevOps, monitoring, tooling)
 
-3. **Create a branch for the issue**
-   - Use: `gh issue develop <issue-number> --checkout`
-   - Or manually: `git checkout -b <type>/<issue-number>-short-description main`
-   - If already on a branch for the issue, proceed without checkout
+3. **Create a worktree for the issue**
+   ```bash
+   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description>
+   cd ../ieomd-<issue-number>
+   ```
+   - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
+   - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
+   - If already in a worktree for the issue, proceed without creating a new one
 
 **If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
 
@@ -54,7 +58,16 @@ This repo is a small monorepo:
   - Fix: `fix/<issue-number>-short-description`
   - Docs: `docs/<description>`
 - Commit messages: `<type>: <description>` (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`)
-- PRs should reference the issue (e.g., “Closes #123”) and `make check` must pass.
+- PRs should reference the issue (e.g., "Closes #123") and `make check` must pass.
+
+## After PR is Merged (REQUIRED)
+Clean up the worktree and branch:
+```bash
+cd /path/to/main/repo
+git worktree remove ../ieomd-<issue-number>
+git branch -d <type>/<issue-number>-<short-description>
+git worktree prune
+```
 
 ## When adding dependencies
 Avoid new dependencies unless necessary; prefer built-ins and existing libs. If a new dependency is required, explain why and update lockfiles (`backend/poetry.lock` or `frontend/package-lock.json`) intentionally.
@@ -64,3 +77,39 @@ These CLIs are authenticated and available:
 - **`gh`** - GitHub CLI for issues, PRs, workflows, projects, and API calls
 - **`doctl`** - DigitalOcean CLI for droplet management and infrastructure
 - **`ssh`** - Direct server access via `ssh root@<ip>` (root is intentional; get IPs from `doctl compute droplet list`)
+
+---
+
+## Running Multiple Dev Servers
+
+When working on multiple issues in parallel, each worktree needs different ports:
+
+| Worktree | Frontend | Backend | Command |
+|----------|----------|---------|---------|
+| First | 5173 | 8000 | `make dev` |
+| Second | 5174 | 8001 | `FRONTEND_PORT=5174 BACKEND_PORT=8001 make dev` |
+| Third | 5175 | 8002 | `FRONTEND_PORT=5175 BACKEND_PORT=8002 make dev` |
+
+## Parallel Work Guidelines
+
+Multiple issues can be worked simultaneously when they touch independent parts of the codebase.
+
+### Subsystem Independence Map
+
+| Subsystem | Key Files | Safe to Parallelize With |
+|-----------|-----------|--------------------------|
+| Frontend UI | `frontend/src/pages/*`, `frontend/src/components/*` | Backend API, Database |
+| Frontend Services | `frontend/src/services/*` | Backend (if API unchanged) |
+| Backend API | `backend/app/routers/*` | Frontend (if contracts stable) |
+| Backend Services | `backend/app/services/*` | Frontend, Database migrations |
+| Database | `backend/app/models/*`, `backend/alembic/*` | Frontend |
+| Infrastructure | `Makefile`, `docker-compose.yml` | Nothing (serialize these) |
+| Docs | `docs/*`, `*.md` | Everything |
+
+### Coordination
+
+- **Check for conflicts before starting** - Review which files each issue will touch
+- **Merge sequentially** - Don't merge PRs simultaneously; let CI run between merges
+- **Rebase after conflicts** - If main updates, rebase your branch before continuing
+
+**Note:** Each worktree has its own SQLite database (relative path `sqlite:///./secrets.db`), so parallel worktrees won't conflict on data.

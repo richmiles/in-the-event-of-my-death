@@ -72,9 +72,14 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
      - **#11** - IEOMD - UX Enhancements (link ordering, defaults, sharing)
      - **#12** - IEOMD - Infrastructure (ongoing DevOps, monitoring, tooling)
 
-3. **Create a branch for the issue**
-   - Use: `gh issue develop <issue-number> --checkout`
-   - Or manually: `git checkout -b <type>/<issue-number>-short-description main`
+3. **Create a worktree for the issue**
+   ```bash
+   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description>
+   cd ../ieomd-<issue-number>
+   ```
+   - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
+   - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
+   - This enables parallel work on multiple issues and keeps each task isolated
 
 **If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
 
@@ -97,11 +102,20 @@ Types:
 Example: `feat: add expires_at column to secrets model`
 
 ### Pull Request Process
-1. Create branch from `main`
+1. Work in the issue's worktree (created in step 3 above)
 2. Make changes, commit with conventional messages
 3. Run `make check` - all checks must pass
-4. Create PR referencing the issue: "Closes #5"
+4. Push and create PR referencing the issue: "Closes #5"
 5. PR title should match the issue title
+
+### After PR is Merged (REQUIRED)
+Clean up the worktree and branch:
+```bash
+cd /path/to/main/repo
+git worktree remove ../ieomd-<issue-number>
+git branch -d <type>/<issue-number>-<short-description>
+git worktree prune
+```
 
 ### Testing Requirements
 - Backend: Add/update tests in `backend/tests/` for any new functionality
@@ -115,3 +129,31 @@ Checklist:
 - [ ] Tests added/updated for new functionality
 - [ ] No console.log or print statements left in code
 - [ ] Environment variables documented if added
+
+---
+
+## Running Multiple Dev Servers
+
+When working on multiple issues in parallel, each worktree needs different ports:
+
+| Worktree | Frontend | Backend | Command |
+|----------|----------|---------|---------|
+| First | 5173 | 8000 | `make dev` |
+| Second | 5174 | 8001 | `FRONTEND_PORT=5174 BACKEND_PORT=8001 make dev` |
+| Third | 5175 | 8002 | `FRONTEND_PORT=5175 BACKEND_PORT=8002 make dev` |
+
+## Parallel Work Guidelines
+
+Multiple issues can be worked simultaneously when they touch independent parts of the codebase.
+
+**Safe to parallelize:**
+- Frontend UI vs Backend API
+- Independent features in different files
+- Documentation alongside any code work
+
+**Avoid parallelizing:**
+- Issues that modify the same files
+- Tasks that depend on each other's changes
+- Changes to shared config (package.json, pyproject.toml, Makefile)
+
+**Note:** Each worktree has its own SQLite database (relative path `sqlite:///./secrets.db`), so parallel worktrees won't conflict on data.
