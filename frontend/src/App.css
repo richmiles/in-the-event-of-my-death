@@ -532,6 +532,114 @@ input[type='email']:focus {
   margin-top: 0.5rem;
 }
 
+/* Date toolbar - horizontal layout */
+.date-toolbar {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  justify-content: center;
+}
+
+.date-toolbar-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.date-toolbar-label {
+  font-size: 0.875rem;
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.date-toolbar-select {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  min-height: 32px;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.date-toolbar-select:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-secondary);
+}
+
+.date-toolbar-select .dropdown-arrow {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+}
+
+.date-toolbar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 0.25rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  min-width: 120px;
+  overflow: hidden;
+}
+
+.date-toolbar-dropdown button {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  transition: background 0.15s;
+}
+
+.date-toolbar-dropdown button:hover {
+  background: var(--bg-muted);
+}
+
+.date-toolbar-dropdown button.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.date-toolbar-custom {
+  padding: 0.5rem;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.date-toolbar-custom input {
+  padding: 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  background: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.date-toolbar-custom input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
 .dates-info {
   background: var(--bg-muted);
   padding: 1rem;
