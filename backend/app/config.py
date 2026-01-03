@@ -46,5 +46,27 @@ class Settings(BaseSettings):
     # Rate Limiting - Feedback
     rate_limit_feedback: str = "5/minute"
 
+    # Capability Tokens
+    capability_tiers: dict = {
+        "basic": {
+            "max_file_size_bytes": 10_000_000,
+            "max_expiry_days": 365,
+            "price_sats": 1000,
+        },
+        "standard": {
+            "max_file_size_bytes": 100_000_000,
+            "max_expiry_days": 730,
+            "price_sats": 5000,
+        },
+        "large": {
+            "max_file_size_bytes": 500_000_000,
+            "max_expiry_days": 1825,
+            "price_sats": 20000,
+        },
+    }
+    rate_limit_token_create: str = "100/minute"
+    rate_limit_token_validate: str = "60/minute"
+    internal_api_key: str | None = None
+
 
 settings = Settings()
