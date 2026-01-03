@@ -64,3 +64,69 @@ These CLIs are authenticated and available:
 - **`gh`** - GitHub CLI for issues, PRs, workflows, projects, and API calls
 - **`doctl`** - DigitalOcean CLI for droplet management and infrastructure
 - **`ssh`** - Direct server access via `ssh root@<ip>` (root is intentional; get IPs from `doctl compute droplet list`)
+
+---
+
+## Parallel Development with Git Worktrees
+
+Multiple Claude Code sessions can work on independent issues simultaneously using git worktrees.
+
+### When to Use Parallel Agents
+
+**Good candidates:**
+- Frontend-only vs backend-only changes
+- Independent features with no shared files
+- Documentation updates alongside code changes
+
+**Avoid parallel work when:**
+- Both issues modify the same files
+- One issue depends on changes from another
+- Changes affect shared configuration (package.json, pyproject.toml)
+
+### Setup
+
+```bash
+# Create worktree for an issue
+git worktree add ../ieomd-<issue-number> -b feature/<issue-number>-<description>
+
+# Example: working on issue #64
+git worktree add ../ieomd-64 -b feature/64-file-uploads
+
+# Start Claude Code session in that worktree
+cd ../ieomd-64 && claude
+```
+
+### Running Multiple Dev Servers
+
+Each worktree needs different ports:
+
+| Worktree | Frontend | Backend | Command |
+|----------|----------|---------|---------|
+| Main | 5173 | 8000 | `make dev` |
+| Worktree 2 | 5174 | 8001 | `VITE_PORT=5174 BACKEND_PORT=8001 make dev` |
+| Worktree 3 | 5175 | 8002 | `VITE_PORT=5175 BACKEND_PORT=8002 make dev` |
+
+### Subsystem Independence Map
+
+| Subsystem | Key Files | Safe to Parallelize With |
+|-----------|-----------|--------------------------|
+| Frontend UI | `frontend/src/pages/*`, `frontend/src/components/*` | Backend API, Database |
+| Frontend Services | `frontend/src/services/*` | Backend (if API unchanged) |
+| Backend API | `backend/app/routers/*` | Frontend (if contracts stable) |
+| Backend Services | `backend/app/services/*` | Frontend, Database migrations |
+| Database | `backend/app/models/*`, `backend/alembic/*` | Frontend |
+| Infrastructure | `Makefile`, `docker-compose.yml` | Nothing (serialize these) |
+| Docs | `docs/*`, `*.md` | Everything |
+
+### Cleanup After Merge
+
+```bash
+git worktree remove ../ieomd-<issue-number>
+git worktree prune
+```
+
+### Coordination Guidelines
+
+1. **Check for conflicts before starting** - Review which files each issue will touch
+2. **Merge sequentially** - Don't merge PRs simultaneously; let CI run between merges
+3. **Rebase after conflicts** - If main updates, rebase your branch before continuing
