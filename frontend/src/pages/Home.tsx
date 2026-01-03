@@ -104,7 +104,7 @@ export default function Home() {
       return
     }
 
-    // Calculate expiry date (default: 1 year after unlock)
+    // Calculate expiry date (default: 1 hour after unlock)
     const expiresAt = getExpiryDate(unlockAt)
     if (!expiresAt) {
       setError('Please select an expiry date')
@@ -138,16 +138,24 @@ export default function Home() {
 
       // Step 4: Create secret on server
       setProgress('Storing encrypted secret...')
-      await createSecret({
+      const createRequest: Parameters<typeof createSecret>[0] = {
         ciphertext: secret.encrypted.ciphertext,
         iv: secret.encrypted.iv,
         auth_tag: secret.encrypted.authTag,
-        unlock_at: unlockAt.toISOString(),
         expires_at: expiresAt.toISOString(),
         edit_token: secret.editToken,
         decrypt_token: secret.decryptToken,
         pow_proof: powProof,
-      })
+      }
+
+      // Send unlock_preset for server-calculated time (avoids clock skew), or unlock_at for custom
+      if (unlockPreset !== 'custom') {
+        createRequest.unlock_preset = unlockPreset
+      } else {
+        createRequest.unlock_at = unlockAt.toISOString()
+      }
+
+      await createSecret(createRequest)
 
       // Step 5: Generate shareable links
       const shareableLinks = generateShareableLinks(
@@ -328,7 +336,17 @@ export default function Home() {
                   setExpiryOpen(false)
                 }}
               >
-                {unlockPreset === 'now' ? 'Now' : 'Custom'}
+                {unlockPreset === 'now'
+                  ? 'Now'
+                  : unlockPreset === '15m'
+                    ? '15 min'
+                    : unlockPreset === '1h'
+                      ? '1 hour'
+                      : unlockPreset === '24h'
+                        ? '24 hours'
+                        : unlockPreset === '1w'
+                          ? '1 week'
+                          : 'Custom'}
                 <span className="dropdown-arrow">▾</span>
               </button>
               {unlockOpen && (
@@ -342,6 +360,46 @@ export default function Home() {
                     }}
                   >
                     Now
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '15m' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('15m')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    15 min
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '1h' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('1h')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    1 hour
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '24h' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('24h')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    24 hours
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '1w' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('1w')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    1 week
                   </button>
                   <button
                     type="button"

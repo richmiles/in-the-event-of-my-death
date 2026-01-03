@@ -1108,6 +1108,251 @@ class TestRetrieveEndpoint:
         assert "message" in detail
 
 
+class TestUnlockPreset:
+    """Tests for server-side unlock_preset feature."""
+
+    def test_create_secret_with_unlock_preset_now(self, client):
+        """Test creating a secret with unlock_preset='now' (server-calculated)."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret with unlock_preset instead of unlock_at
+        expires_at = utcnow() + timedelta(days=7)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_preset": "now",  # Server calculates unlock_at
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 201
+        data = create_response.json()
+        assert "unlock_at" in data
+        # unlock_at should be close to now (within 1 minute)
+        unlock_at = datetime.fromisoformat(data["unlock_at"].rstrip("Z"))
+        time_diff = abs((utcnow() - unlock_at).total_seconds())
+        assert time_diff < 60, f"unlock_at is not recent: {data['unlock_at']}"
+
+    def test_create_secret_with_unlock_preset_1h(self, client):
+        """Test creating a secret with unlock_preset='1h' (1 hour from now)."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret with unlock_preset='1h'
+        expires_at = utcnow() + timedelta(days=7)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_preset": "1h",  # 1 hour from now
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 201
+        data = create_response.json()
+        assert "unlock_at" in data
+        # unlock_at should be about 1 hour from now (within 1 minute tolerance)
+        unlock_at = datetime.fromisoformat(data["unlock_at"].rstrip("Z"))
+        expected = utcnow() + timedelta(hours=1)
+        time_diff = abs((expected - unlock_at).total_seconds())
+        assert time_diff < 60, f"unlock_at should be ~1 hour from now, got {data['unlock_at']}"
+
+    def test_create_secret_with_unlock_preset_1w(self, client):
+        """Test creating a secret with unlock_preset='1w' (1 week from now)."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret with unlock_preset='1w'
+        expires_at = utcnow() + timedelta(weeks=2)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_preset": "1w",  # 1 week from now
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 201
+        data = create_response.json()
+        assert "unlock_at" in data
+        # unlock_at should be about 1 week from now (within 1 minute tolerance)
+        unlock_at = datetime.fromisoformat(data["unlock_at"].rstrip("Z"))
+        expected = utcnow() + timedelta(weeks=1)
+        time_diff = abs((expected - unlock_at).total_seconds())
+        assert time_diff < 60, f"unlock_at should be ~1 week from now, got {data['unlock_at']}"
+
+    def test_create_secret_without_unlock_at_or_preset_rejected(self, client):
+        """Test that creating a secret without unlock_at or unlock_preset is rejected."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Try to create secret without unlock_at or unlock_preset
+        expires_at = utcnow() + timedelta(days=7)
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                # No unlock_at or unlock_preset
+                "expires_at": expires_at.isoformat(),
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 422
+        assert (
+            "unlock_at" in str(create_response.json()).lower()
+            or "unlock_preset" in str(create_response.json()).lower()
+        )
+
+    def test_unlock_preset_all_values(self, client):
+        """Test all valid unlock_preset values."""
+        presets = ["now", "15m", "1h", "24h", "1w"]
+        expected_offsets = {
+            "now": timedelta(seconds=0),
+            "15m": timedelta(minutes=15),
+            "1h": timedelta(hours=1),
+            "24h": timedelta(hours=24),
+            "1w": timedelta(weeks=1),
+        }
+
+        for preset in presets:
+            test_data = generate_test_data()
+            payload_hash = compute_payload_hash(
+                test_data["ciphertext_bytes"],
+                test_data["iv_bytes"],
+                test_data["auth_tag_bytes"],
+            )
+
+            # Get challenge and solve PoW
+            challenge_response = client.post(
+                "/api/v1/challenges",
+                json={"payload_hash": payload_hash, "ciphertext_size": 100},
+            )
+            challenge = challenge_response.json()
+            counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+            # Create secret with this preset
+            expires_at = utcnow() + timedelta(weeks=2)
+            create_response = client.post(
+                "/api/v1/secrets",
+                json={
+                    "ciphertext": test_data["ciphertext"],
+                    "iv": test_data["iv"],
+                    "auth_tag": test_data["auth_tag"],
+                    "unlock_preset": preset,
+                    "expires_at": expires_at.isoformat(),
+                    "edit_token": test_data["edit_token"],
+                    "decrypt_token": test_data["decrypt_token"],
+                    "pow_proof": {
+                        "challenge_id": challenge["challenge_id"],
+                        "nonce": challenge["nonce"],
+                        "counter": counter,
+                        "payload_hash": payload_hash,
+                    },
+                },
+            )
+
+            assert create_response.status_code == 201, f"Failed for preset={preset}"
+            data = create_response.json()
+
+            # Verify unlock_at is approximately correct
+            unlock_at = datetime.fromisoformat(data["unlock_at"].rstrip("Z"))
+            expected = utcnow() + expected_offsets[preset]
+            time_diff = abs((expected - unlock_at).total_seconds())
+            assert time_diff < 60, f"unlock_at wrong for preset={preset}: {data['unlock_at']}"
+
+
 class TestRateLimitClientIP:
     """Tests for rate limiting client IP extraction."""
 

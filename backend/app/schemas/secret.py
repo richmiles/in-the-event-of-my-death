@@ -1,11 +1,14 @@
 import base64
 import re
 from datetime import UTC, datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field, PlainSerializer, field_validator, model_validator
 
 from app.config import settings
+
+# Type for unlock presets that the server calculates
+UnlockPresetType = Literal["now", "15m", "1h", "24h", "1w"]
 
 
 def serialize_datetime_utc(dt: datetime) -> str:
@@ -46,7 +49,8 @@ class SecretCreate(BaseModel):
     ciphertext: str = Field(..., description="Base64 encoded ciphertext")
     iv: str = Field(..., description="Base64 encoded 12-byte IV")
     auth_tag: str = Field(..., description="Base64 encoded 16-byte auth tag")
-    unlock_at: datetime
+    unlock_at: datetime | None = None  # Optional when unlock_preset is provided
+    unlock_preset: UnlockPresetType | None = None  # Server calculates unlock_at from this
     expires_at: datetime
     edit_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     decrypt_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
@@ -80,7 +84,9 @@ class SecretCreate(BaseModel):
 
     @field_validator("unlock_at")
     @classmethod
-    def validate_unlock_at(cls, v: datetime) -> datetime:
+    def validate_unlock_at(cls, v: datetime | None) -> datetime | None:
+        if v is None:
+            return None  # Will be set from unlock_preset in model_validator
         now = datetime.now(UTC).replace(tzinfo=None)
         min_unlock = now + timedelta(minutes=settings.min_unlock_minutes)
         max_unlock = now + timedelta(days=settings.max_unlock_days)
@@ -110,7 +116,26 @@ class SecretCreate(BaseModel):
         return v_naive
 
     @model_validator(mode="after")
-    def validate_expiry_constraints(self) -> "SecretCreate":
+    def validate_and_compute_unlock(self) -> "SecretCreate":
+        # Calculate unlock_at from preset if provided
+        if self.unlock_preset is not None:
+            now = datetime.now(UTC).replace(tzinfo=None)
+            if self.unlock_preset == "now":
+                self.unlock_at = now
+            elif self.unlock_preset == "15m":
+                self.unlock_at = now + timedelta(minutes=15)
+            elif self.unlock_preset == "1h":
+                self.unlock_at = now + timedelta(hours=1)
+            elif self.unlock_preset == "24h":
+                self.unlock_at = now + timedelta(hours=24)
+            elif self.unlock_preset == "1w":
+                self.unlock_at = now + timedelta(weeks=1)
+
+        # Ensure unlock_at is set (either directly or from preset)
+        if self.unlock_at is None:
+            raise ValueError("Either unlock_at or unlock_preset must be provided")
+
+        # Validate expiry constraints
         min_gap = timedelta(minutes=settings.min_expiry_gap_minutes)
         if self.expires_at <= self.unlock_at:
             raise ValueError("expires_at must be after unlock_at")
