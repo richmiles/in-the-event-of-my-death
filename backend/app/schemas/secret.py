@@ -233,6 +233,14 @@ class SecretStatusResponse(BaseModel):
     expires_at: UTCDateTime | None = None  # None only when exists=False
 
 
+class SecretIdStatusResponse(BaseModel):
+    id: str
+    exists: bool
+    status: str  # "pending" | "unlocked" | "expired" | "retrieved"
+    unlock_at: UTCDateTime
+    expires_at: UTCDateTime
+
+
 class SecretRetrieveResponse(BaseModel):
     status: str
     ciphertext: str | None = None

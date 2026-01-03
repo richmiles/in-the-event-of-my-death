@@ -102,6 +102,15 @@ def find_secret_by_decrypt_token(db: Session, decrypt_token: str) -> Secret | No
     return None
 
 
+def find_secret_by_id(db: Session, secret_id: str) -> Secret | None:
+    """Find a secret by its ID.
+
+    The secret row is kept even after retrieval/expiry (ciphertext is cleared),
+    so ID-based status checks must not filter on `is_deleted`.
+    """
+    return db.query(Secret).filter(Secret.id == secret_id).first()
+
+
 def update_secret_dates(
     db: Session, secret: Secret, new_unlock_at: datetime, new_expires_at: datetime
 ) -> Secret:

@@ -13,6 +13,7 @@ from app.schemas.secret import (
     SecretCreateResponse,
     SecretEditRequest,
     SecretEditResponse,
+    SecretIdStatusResponse,
     SecretRetrieveResponse,
     SecretStatusResponse,
 )
@@ -30,6 +31,7 @@ from app.services.secret_service import (
     create_secret,
     find_secret_by_decrypt_token,
     find_secret_by_edit_token,
+    find_secret_by_id,
     get_secret_status,
     retrieve_secret,
     update_secret_dates,
@@ -322,3 +324,31 @@ async def get_edit_status(
 
     status = get_secret_status(db, secret)
     return SecretStatusResponse(**status)
+
+
+@router.get("/secrets/{secret_id}/status", response_model=SecretIdStatusResponse)
+@limiter.limit(settings.rate_limit_retrieves)
+async def get_status_by_id(
+    request: Request,
+    secret_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Public status endpoint by secret ID.
+
+    Intended for the vault dashboard to refresh status without requiring tokens.
+    """
+    secret = find_secret_by_id(db, secret_id)
+    if not secret:
+        raise HTTPException(status_code=404, detail="Secret not found")
+
+    status = get_secret_status(db, secret)
+    mapped_status = "unlocked" if status["status"] == "available" else status["status"]
+
+    return SecretIdStatusResponse(
+        id=secret.id,
+        exists=True,
+        status=mapped_status,
+        unlock_at=secret.unlock_at,
+        expires_at=secret.expires_at,
+    )
