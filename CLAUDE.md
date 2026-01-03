@@ -35,6 +35,24 @@
 - Frontend: `VITE_API_URL`, `VITE_BASE_URL`
 - Backend: `DATABASE_URL`, `CORS_ORIGINS`
 
+## Available CLI Tools
+Claude has authenticated access to these CLIs for infrastructure and repo management:
+
+- **`gh`** - GitHub CLI (authenticated)
+  - Issues: `gh issue list`, `gh issue create`, `gh issue view <issue-number>`
+  - PRs: `gh pr create`, `gh pr list`, `gh pr view <pr-number>`
+  - Workflows: `gh workflow run <name>`, `gh run list`, `gh run view <run-id>`
+  - Projects: `gh project item-add <project-number> --owner richmiles --url <issue-url>`
+  - API: `gh api <endpoint>` for any GitHub API call
+
+- **`doctl`** - DigitalOcean CLI (authenticated)
+  - Droplets: `doctl compute droplet list`
+  - Droplet names: `ieomd-prod`, `ieomd-staging`
+
+- **`ssh`** - Direct server access
+  - `ssh root@<ip>` (root access is intentional for this setup)
+  - Get IPs via `doctl compute droplet list`
+
 ---
 
 ## Workflow
