@@ -876,6 +876,24 @@ input[type='email']:focus {
   background: var(--accent-primary);
 }
 
+.share-button {
+  padding: 0.75rem 1rem;
+  min-height: 44px;
+  min-width: 44px;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--bg-primary);
+  transition: background 0.2s;
+}
+
+.share-button:hover {
+  background: var(--accent-hover);
+}
+
 /* Messages */
 .success-message {
   background: rgba(74, 222, 128, 0.15);
@@ -1234,7 +1252,8 @@ input[type='email']:focus {
     font-size: 0.8125rem;
   }
 
-  .copy-button {
+  .copy-button,
+  .share-button {
     width: 100%;
   }
 
