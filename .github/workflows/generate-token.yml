@@ -60,7 +60,7 @@ jobs:
             }')
 
           # Make API request
-          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "${{ secrets.API_URL }}/api/v1/capability-tokens" \
+          RESPONSE=$(curl -sS -w "\n%{http_code}" -X POST "https://${{ secrets.PROD_SITE_HOST }}/api/v1/capability-tokens" \
             -H "Content-Type: application/json" \
             -H "X-API-Key: ${{ secrets.INTERNAL_API_KEY }}" \
             -d "$REQUEST_BODY")
