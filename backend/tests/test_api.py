@@ -518,7 +518,8 @@ class TestValidation:
         )
 
         assert response.status_code == 422
-        assert "future" in str(response.json()).lower() or "0 minutes" in str(response.json())
+        error_msg = str(response.json()).lower()
+        assert "past" in error_msg or "future" in error_msg
 
 
 class TestPowHardening:

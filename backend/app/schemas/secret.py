@@ -97,9 +97,11 @@ class SecretCreate(BaseModel):
         v_naive = v.replace(tzinfo=None) if v.tzinfo else v
 
         if v_naive < min_unlock:
-            raise ValueError(
-                f"Unlock date must be at least {settings.min_unlock_minutes} minutes in the future"
-            )
+            if settings.min_unlock_minutes == 0:
+                raise ValueError("Unlock date cannot be in the past")
+            else:
+                min_mins = settings.min_unlock_minutes
+                raise ValueError(f"Unlock date must be at least {min_mins} minutes in the future")
         if v_naive > max_unlock:
             raise ValueError(f"Unlock date cannot exceed {settings.max_unlock_days} days")
         return v_naive

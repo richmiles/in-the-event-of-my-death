@@ -104,7 +104,7 @@ export default function Home() {
       return
     }
 
-    // Calculate expiry date (default: 1 hour after unlock)
+    // Calculate expiry date based on selected preset
     const expiresAt = getExpiryDate(unlockAt)
     if (!expiresAt) {
       setError('Please select an expiry date')
