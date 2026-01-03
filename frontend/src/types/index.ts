@@ -17,8 +17,10 @@ export interface SecretCreateRequest {
   ciphertext: string
   iv: string
   auth_tag: string
-  unlock_at: string
-  expires_at: string
+  unlock_at?: string // Optional when unlock_preset is provided
+  unlock_preset?: 'now' | '15m' | '1h' | '24h' | '1w' // Server calculates unlock_at
+  expires_at?: string // Optional when expiry_preset is provided
+  expiry_preset?: '15m' | '1h' | '24h' | '1w' // Server calculates expires_at
   edit_token: string
   decrypt_token: string
   pow_proof: PowProof

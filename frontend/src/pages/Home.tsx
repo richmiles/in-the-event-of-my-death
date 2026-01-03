@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { generateSecret, base64ToBytes } from '../services/crypto'
 import { requestChallenge, createSecret } from '../services/api'
 import { solveChallenge } from '../services/pow'
@@ -6,10 +6,9 @@ import { generateShareableLinks } from '../utils/urlFragments'
 import {
   applyDateOffset,
   validateExpiryDate,
-  formatDateForDisplay,
-  type DatePreset,
+  type UnlockPreset,
+  type ExpiryPreset,
 } from '../utils/dates'
-import { CollapsibleDateControl } from '../components/CollapsibleDateControl'
 import type { ShareableLinks } from '../types'
 
 type Step = 'input' | 'processing' | 'done'
@@ -17,20 +16,26 @@ type Step = 'input' | 'processing' | 'done'
 export default function Home() {
   const [step, setStep] = useState<Step>('input')
   const [message, setMessage] = useState('')
-  const [datePreset, setDatePreset] = useState<DatePreset>('1m')
-  const [customDate, setCustomDate] = useState('')
-  const [customTime, setCustomTime] = useState('00:00')
+  const [unlockPreset, setUnlockPreset] = useState<UnlockPreset>('now')
+  const [customUnlockDate, setCustomUnlockDate] = useState('')
+  const [customUnlockTime, setCustomUnlockTime] = useState('00:00')
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string>('')
   const [links, setLinks] = useState<ShareableLinks | null>(null)
   const [copied, setCopied] = useState<'edit' | 'view' | null>(null)
 
   // Expiry date state
-  const [expiryPreset, setExpiryPreset] = useState<DatePreset>('1y')
+  const [expiryPreset, setExpiryPreset] = useState<ExpiryPreset>('1h')
   const [customExpiryDate, setCustomExpiryDate] = useState('')
   const [customExpiryTime, setCustomExpiryTime] = useState('00:00')
   const [createdUnlockAt, setCreatedUnlockAt] = useState<Date | null>(null)
   const [createdExpiresAt, setCreatedExpiresAt] = useState<Date | null>(null)
+
+  // Dropdown open state
+  const [unlockOpen, setUnlockOpen] = useState(false)
+  const [expiryOpen, setExpiryOpen] = useState(false)
+  const unlockRef = useRef<HTMLDivElement>(null)
+  const expiryRef = useRef<HTMLDivElement>(null)
 
   // Tick state to trigger re-renders for live time updates
   const [, setTick] = useState(0)
@@ -41,20 +46,32 @@ export default function Home() {
 
   useEffect(() => {
     // Only tick when on input step and using non-custom presets (they depend on current time)
-    if (step === 'input' && (datePreset !== 'custom' || expiryPreset !== 'custom')) {
+    if (step === 'input' && (unlockPreset !== 'custom' || expiryPreset !== 'custom')) {
       const interval = setInterval(() => setTick((t) => t + 1), 1000)
       return () => clearInterval(interval)
     }
-  }, [step, datePreset, expiryPreset])
+  }, [step, unlockPreset, expiryPreset])
 
-  // Calculate minimum date (5 minutes from now)
-  const now = new Date()
-  const minDate = new Date(now.getTime() + 5 * 60 * 1000)
-  const minDateStr = minDate.toISOString().split('T')[0]
+  // Close dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (unlockRef.current && !unlockRef.current.contains(e.target as Node)) {
+        setUnlockOpen(false)
+      }
+      if (expiryRef.current && !expiryRef.current.contains(e.target as Node)) {
+        setExpiryOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   // Calculate unlock date from preset
   const getUnlockDate = (): Date | null => {
-    return applyDateOffset(new Date(), datePreset, { date: customDate, time: customTime })
+    return applyDateOffset(new Date(), unlockPreset, {
+      date: customUnlockDate,
+      time: customUnlockTime,
+    })
   }
 
   // Calculate expiry date from preset (relative to unlock date)
@@ -68,7 +85,7 @@ export default function Home() {
   // Check if form is valid
   const isValid =
     message.trim() &&
-    (datePreset !== 'custom' || (customDate && customTime)) &&
+    (unlockPreset !== 'custom' || (customUnlockDate && customUnlockTime)) &&
     (expiryPreset !== 'custom' || (customExpiryDate && customExpiryTime))
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -81,12 +98,13 @@ export default function Home() {
       return
     }
 
-    if (unlockAt <= new Date()) {
+    // Only validate future date for custom presets
+    if (unlockPreset === 'custom' && unlockAt <= new Date()) {
       setError('Unlock date must be in the future')
       return
     }
 
-    // Calculate expiry date (default: 1 year after unlock)
+    // Calculate expiry date based on selected preset
     const expiresAt = getExpiryDate(unlockAt)
     if (!expiresAt) {
       setError('Please select an expiry date')
@@ -120,16 +138,29 @@ export default function Home() {
 
       // Step 4: Create secret on server
       setProgress('Storing encrypted secret...')
-      await createSecret({
+      const createRequest: Parameters<typeof createSecret>[0] = {
         ciphertext: secret.encrypted.ciphertext,
         iv: secret.encrypted.iv,
         auth_tag: secret.encrypted.authTag,
-        unlock_at: unlockAt.toISOString(),
-        expires_at: expiresAt.toISOString(),
         edit_token: secret.editToken,
         decrypt_token: secret.decryptToken,
         pow_proof: powProof,
-      })
+      }
+
+      // Send presets for server-calculated times (avoids clock skew), or absolute times for custom
+      if (unlockPreset !== 'custom') {
+        createRequest.unlock_preset = unlockPreset
+      } else {
+        createRequest.unlock_at = unlockAt.toISOString()
+      }
+
+      if (expiryPreset !== 'custom') {
+        createRequest.expiry_preset = expiryPreset
+      } else {
+        createRequest.expires_at = expiresAt.toISOString()
+      }
+
+      const response = await createSecret(createRequest)
 
       // Step 5: Generate shareable links
       const shareableLinks = generateShareableLinks(
@@ -139,8 +170,9 @@ export default function Home() {
       )
 
       setLinks(shareableLinks)
-      setCreatedUnlockAt(unlockAt)
-      setCreatedExpiresAt(expiresAt)
+      // Use server-provided times (accurate, no clock skew)
+      setCreatedUnlockAt(new Date(response.unlock_at))
+      setCreatedExpiresAt(new Date(response.expires_at))
       setStep('done')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
@@ -157,10 +189,10 @@ export default function Home() {
   const resetForm = () => {
     setStep('input')
     setMessage('')
-    setDatePreset('1m')
-    setCustomDate('')
-    setCustomTime('00:00')
-    setExpiryPreset('1y')
+    setUnlockPreset('now')
+    setCustomUnlockDate('')
+    setCustomUnlockTime('00:00')
+    setExpiryPreset('1h')
     setCustomExpiryDate('')
     setCustomExpiryTime('00:00')
     setCreatedUnlockAt(null)
@@ -273,7 +305,6 @@ export default function Home() {
   }
 
   const unlockDate = getUnlockDate()
-  const expiryDate = unlockDate ? getExpiryDate(unlockDate) : null
 
   return (
     <div className="home">
@@ -300,45 +331,201 @@ export default function Home() {
             Send
           </button>
 
-          <CollapsibleDateControl
-            id="unlock"
-            label="Unlocks"
-            displayValue={formatDateForDisplay(unlockDate)}
-            presets={[
-              { value: '1w', label: '1 Week' },
-              { value: '1m', label: '1 Month' },
-              { value: '1y', label: '1 Year' },
-              { value: 'custom', label: 'Custom' },
-            ]}
-            activePreset={datePreset}
-            onPresetChange={(p) => setDatePreset(p as DatePreset)}
-            customDate={customDate}
-            customTime={customTime}
-            onCustomDateChange={setCustomDate}
-            onCustomTimeChange={setCustomTime}
-            minDate={minDateStr}
-            customHint="Select a date to continue"
-          />
+          <div className="date-toolbar">
+            <div className="date-toolbar-item" ref={unlockRef}>
+              <span className="date-toolbar-label">Unlocks</span>
+              <button
+                type="button"
+                className="date-toolbar-select"
+                onClick={() => {
+                  setUnlockOpen(!unlockOpen)
+                  setExpiryOpen(false)
+                }}
+              >
+                {unlockPreset === 'now'
+                  ? 'Now'
+                  : unlockPreset === '15m'
+                    ? '15 min'
+                    : unlockPreset === '1h'
+                      ? '1 hour'
+                      : unlockPreset === '24h'
+                        ? '24 hours'
+                        : unlockPreset === '1w'
+                          ? '1 week'
+                          : 'Custom'}
+                <span className="dropdown-arrow">▾</span>
+              </button>
+              {unlockOpen && (
+                <div className="date-toolbar-dropdown">
+                  <button
+                    type="button"
+                    className={unlockPreset === 'now' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('now')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    Now
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '15m' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('15m')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    15 min
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '1h' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('1h')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    1 hour
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '24h' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('24h')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    24 hours
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === '1w' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('1w')
+                      setUnlockOpen(false)
+                    }}
+                  >
+                    1 week
+                  </button>
+                  <button
+                    type="button"
+                    className={unlockPreset === 'custom' ? 'active' : ''}
+                    onClick={() => {
+                      setUnlockPreset('custom')
+                    }}
+                  >
+                    Custom
+                  </button>
+                  {unlockPreset === 'custom' && (
+                    <div className="date-toolbar-custom">
+                      <input
+                        type="date"
+                        value={customUnlockDate}
+                        onChange={(e) => setCustomUnlockDate(e.target.value)}
+                        min={new Date().toISOString().split('T')[0]}
+                      />
+                      <input
+                        type="time"
+                        value={customUnlockTime}
+                        onChange={(e) => setCustomUnlockTime(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
-          <CollapsibleDateControl
-            id="expiry"
-            label="Expires"
-            displayValue={formatDateForDisplay(expiryDate)}
-            presets={[
-              { value: '1w', label: '+1 Week' },
-              { value: '1m', label: '+1 Month' },
-              { value: '1y', label: '+1 Year' },
-              { value: 'custom', label: 'Custom' },
-            ]}
-            activePreset={expiryPreset}
-            onPresetChange={(p) => setExpiryPreset(p as DatePreset)}
-            customDate={customExpiryDate}
-            customTime={customExpiryTime}
-            onCustomDateChange={setCustomExpiryDate}
-            onCustomTimeChange={setCustomExpiryTime}
-            minDate={unlockDate?.toISOString().split('T')[0]}
-            customHint="Select an expiry date to continue"
-          />
+            <div className="date-toolbar-item" ref={expiryRef}>
+              <span className="date-toolbar-label">Expires</span>
+              <button
+                type="button"
+                className="date-toolbar-select"
+                onClick={() => {
+                  setExpiryOpen(!expiryOpen)
+                  setUnlockOpen(false)
+                }}
+              >
+                {expiryPreset === '15m'
+                  ? '15 min'
+                  : expiryPreset === '1h'
+                    ? '1 hour'
+                    : expiryPreset === '24h'
+                      ? '24 hours'
+                      : expiryPreset === '1w'
+                        ? '1 week'
+                        : 'Custom'}
+                <span className="dropdown-arrow">▾</span>
+              </button>
+              {expiryOpen && (
+                <div className="date-toolbar-dropdown">
+                  <button
+                    type="button"
+                    className={expiryPreset === '15m' ? 'active' : ''}
+                    onClick={() => {
+                      setExpiryPreset('15m')
+                      setExpiryOpen(false)
+                    }}
+                  >
+                    15 min
+                  </button>
+                  <button
+                    type="button"
+                    className={expiryPreset === '1h' ? 'active' : ''}
+                    onClick={() => {
+                      setExpiryPreset('1h')
+                      setExpiryOpen(false)
+                    }}
+                  >
+                    1 hour
+                  </button>
+                  <button
+                    type="button"
+                    className={expiryPreset === '24h' ? 'active' : ''}
+                    onClick={() => {
+                      setExpiryPreset('24h')
+                      setExpiryOpen(false)
+                    }}
+                  >
+                    24 hours
+                  </button>
+                  <button
+                    type="button"
+                    className={expiryPreset === '1w' ? 'active' : ''}
+                    onClick={() => {
+                      setExpiryPreset('1w')
+                      setExpiryOpen(false)
+                    }}
+                  >
+                    1 week
+                  </button>
+                  <button
+                    type="button"
+                    className={expiryPreset === 'custom' ? 'active' : ''}
+                    onClick={() => {
+                      setExpiryPreset('custom')
+                    }}
+                  >
+                    Custom
+                  </button>
+                  {expiryPreset === 'custom' && (
+                    <div className="date-toolbar-custom">
+                      <input
+                        type="date"
+                        value={customExpiryDate}
+                        onChange={(e) => setCustomExpiryDate(e.target.value)}
+                        min={unlockDate?.toISOString().split('T')[0]}
+                      />
+                      <input
+                        type="time"
+                        value={customExpiryTime}
+                        onChange={(e) => setCustomExpiryTime(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
 
           <p className="security-note">Encrypted in your browser. We never see your plaintext.</p>
 

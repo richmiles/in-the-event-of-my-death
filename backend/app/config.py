@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     # Limits
     max_ciphertext_size: int = 1_000_000  # 1MB
     max_unlock_days: int = 730  # 2 years
-    min_unlock_minutes: int = 5
+    min_unlock_minutes: int = 0
     max_expiry_days: int = 1825  # 5 years
     min_expiry_gap_minutes: int = 15  # minimum gap between unlock_at and expires_at
 
