@@ -138,7 +138,7 @@ jobs:
           backend="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-backend:v${version}"
           web="ghcr.io/${GITHUB_REPOSITORY_OWNER}/in-the-event-of-my-death-web:v${version}"
           ssh -o BatchMode=yes -o ConnectTimeout=10 "${{ secrets.PROD_SSH_USER }}@${{ secrets.PROD_SSH_HOST }}" \
-            "sudo /usr/local/bin/ieomd-deploy deploy --dir /opt/ieomd --backend-image ${backend} --web-image ${web}"
+            "sudo INTERNAL_API_KEY='${{ secrets.INTERNAL_API_KEY }}' /usr/local/bin/ieomd-deploy deploy --dir /opt/ieomd --backend-image ${backend} --web-image ${web}"
 
       - uses: actions/checkout@v4
 
