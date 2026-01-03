@@ -72,9 +72,13 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
      - **#11** - IEOMD - UX Enhancements (link ordering, defaults, sharing)
      - **#12** - IEOMD - Infrastructure (ongoing DevOps, monitoring, tooling)
 
-3. **Create a branch for the issue**
-   - Use: `gh issue develop <issue-number> --checkout`
-   - Or manually: `git checkout -b <type>/<issue-number>-short-description main`
+3. **Create a worktree for the issue**
+   ```bash
+   git worktree add ../ieomd-<issue-number> -b feature/<issue-number>-<description>
+   cd ../ieomd-<issue-number>
+   ```
+   - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
+   - This enables parallel work on multiple issues and keeps each task isolated
 
 **If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
 
@@ -97,11 +101,20 @@ Types:
 Example: `feat: add expires_at column to secrets model`
 
 ### Pull Request Process
-1. Create branch from `main`
+1. Work in the issue's worktree (created in step 3 above)
 2. Make changes, commit with conventional messages
 3. Run `make check` - all checks must pass
-4. Create PR referencing the issue: "Closes #5"
+4. Push and create PR referencing the issue: "Closes #5"
 5. PR title should match the issue title
+
+### After PR is Merged (REQUIRED)
+Clean up the worktree and branch:
+```bash
+cd /path/to/main/repo
+git worktree remove ../ieomd-<issue-number>
+git branch -d feature/<issue-number>-<description>
+git worktree prune
+```
 
 ### Testing Requirements
 - Backend: Add/update tests in `backend/tests/` for any new functionality
@@ -118,74 +131,26 @@ Checklist:
 
 ---
 
-## Parallel Development with Git Worktrees
+## Running Multiple Dev Servers
 
-Use git worktrees to work on multiple issues simultaneously with separate Claude Code sessions.
+When working on multiple issues in parallel, each worktree needs different ports:
 
-### When to Use Worktrees
-- Issues that touch **independent parts** of the codebase (e.g., frontend-only vs backend-only)
-- Multiple unrelated bug fixes or features
-- Long-running tasks where you want to context-switch without stashing
+| Worktree | Frontend | Backend | Command |
+|----------|----------|---------|---------|
+| First | 5173 | 8000 | `make dev` |
+| Second | 5174 | 8001 | `VITE_PORT=5174 BACKEND_PORT=8001 make dev` |
+| Third | 5175 | 8002 | `VITE_PORT=5175 BACKEND_PORT=8002 make dev` |
 
-### When NOT to Use Worktrees
-- Issues that modify the same files (will cause merge conflicts)
+## Parallel Work Guidelines
+
+Multiple issues can be worked simultaneously when they touch independent parts of the codebase.
+
+**Safe to parallelize:**
+- Frontend UI vs Backend API
+- Independent features in different files
+- Documentation alongside any code work
+
+**Avoid parallelizing:**
+- Issues that modify the same files
 - Tasks that depend on each other's changes
-- Quick fixes that can be done sequentially
-
-### Setup
-
-```bash
-# From main repo, create a worktree for an issue
-git worktree add ../ieomd-<issue-number> -b feature/<issue-number>-<description>
-
-# Example: working on issue #64 (file uploads)
-git worktree add ../ieomd-64 -b feature/64-file-uploads
-
-# Start a Claude Code session in the worktree
-cd ../ieomd-64 && claude
-```
-
-### Directory Convention
-- Main repo: `in-the-event-of-my-death/` (or wherever you cloned it)
-- Worktrees: `ieomd-<issue-number>/` (sibling directories)
-
-### Running Dev Servers
-Each worktree can run its own dev server on different ports:
-
-```bash
-# Worktree 1 (default ports)
-make dev  # Frontend: 5173, Backend: 8000
-
-# Worktree 2 (custom ports)
-VITE_PORT=5174 BACKEND_PORT=8001 make dev
-```
-
-### Cleanup After Merge
-
-```bash
-# After PR is merged, remove the worktree
-cd /path/to/main/repo
-git worktree remove ../ieomd-<issue-number>
-
-# Or force remove if there are uncommitted changes
-git worktree remove --force ../ieomd-<issue-number>
-
-# Prune stale worktree references
-git worktree prune
-```
-
-### Example: Parallel Frontend + Backend Work
-
-```bash
-# Terminal 1: Backend work on issue #62 (payments)
-git worktree add ../ieomd-62 -b feature/62-btcpay-integration
-cd ../ieomd-62
-claude  # "Work on BTCPay Server integration"
-
-# Terminal 2: Frontend work on issue #66 (QR codes)
-git worktree add ../ieomd-66 -b feature/66-qr-codes
-cd ../ieomd-66
-claude  # "Add QR code generation for secret links"
-```
-
-Both sessions work independently. PRs are created and merged separately.
+- Changes to shared config (package.json, pyproject.toml, Makefile)

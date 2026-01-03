@@ -19,10 +19,13 @@ This repo is a small monorepo:
      - **#11** - IEOMD - UX Enhancements (link ordering, defaults, sharing)
      - **#12** - IEOMD - Infrastructure (ongoing DevOps, monitoring, tooling)
 
-3. **Create a branch for the issue**
-   - Use: `gh issue develop <issue-number> --checkout`
-   - Or manually: `git checkout -b <type>/<issue-number>-short-description main`
-   - If already on a branch for the issue, proceed without checkout
+3. **Create a worktree for the issue**
+   ```bash
+   git worktree add ../ieomd-<issue-number> -b feature/<issue-number>-<description>
+   cd ../ieomd-<issue-number>
+   ```
+   - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
+   - If already in a worktree for the issue, proceed without creating a new one
 
 **If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
 
@@ -54,7 +57,16 @@ This repo is a small monorepo:
   - Fix: `fix/<issue-number>-short-description`
   - Docs: `docs/<description>`
 - Commit messages: `<type>: <description>` (`feat`, `fix`, `refactor`, `docs`, `test`, `chore`)
-- PRs should reference the issue (e.g., “Closes #123”) and `make check` must pass.
+- PRs should reference the issue (e.g., "Closes #123") and `make check` must pass.
+
+## After PR is Merged (REQUIRED)
+Clean up the worktree and branch:
+```bash
+cd /path/to/main/repo
+git worktree remove ../ieomd-<issue-number>
+git branch -d feature/<issue-number>-<description>
+git worktree prune
+```
 
 ## When adding dependencies
 Avoid new dependencies unless necessary; prefer built-ins and existing libs. If a new dependency is required, explain why and update lockfiles (`backend/poetry.lock` or `frontend/package-lock.json`) intentionally.
@@ -67,44 +79,19 @@ These CLIs are authenticated and available:
 
 ---
 
-## Parallel Development with Git Worktrees
+## Running Multiple Dev Servers
 
-Multiple Claude Code sessions can work on independent issues simultaneously using git worktrees.
-
-### When to Use Parallel Agents
-
-**Good candidates:**
-- Frontend-only vs backend-only changes
-- Independent features with no shared files
-- Documentation updates alongside code changes
-
-**Avoid parallel work when:**
-- Both issues modify the same files
-- One issue depends on changes from another
-- Changes affect shared configuration (package.json, pyproject.toml)
-
-### Setup
-
-```bash
-# Create worktree for an issue
-git worktree add ../ieomd-<issue-number> -b feature/<issue-number>-<description>
-
-# Example: working on issue #64
-git worktree add ../ieomd-64 -b feature/64-file-uploads
-
-# Start Claude Code session in that worktree
-cd ../ieomd-64 && claude
-```
-
-### Running Multiple Dev Servers
-
-Each worktree needs different ports:
+When working on multiple issues in parallel, each worktree needs different ports:
 
 | Worktree | Frontend | Backend | Command |
 |----------|----------|---------|---------|
-| Main | 5173 | 8000 | `make dev` |
-| Worktree 2 | 5174 | 8001 | `VITE_PORT=5174 BACKEND_PORT=8001 make dev` |
-| Worktree 3 | 5175 | 8002 | `VITE_PORT=5175 BACKEND_PORT=8002 make dev` |
+| First | 5173 | 8000 | `make dev` |
+| Second | 5174 | 8001 | `VITE_PORT=5174 BACKEND_PORT=8001 make dev` |
+| Third | 5175 | 8002 | `VITE_PORT=5175 BACKEND_PORT=8002 make dev` |
+
+## Parallel Work Guidelines
+
+Multiple issues can be worked simultaneously when they touch independent parts of the codebase.
 
 ### Subsystem Independence Map
 
@@ -118,15 +105,8 @@ Each worktree needs different ports:
 | Infrastructure | `Makefile`, `docker-compose.yml` | Nothing (serialize these) |
 | Docs | `docs/*`, `*.md` | Everything |
 
-### Cleanup After Merge
+### Coordination
 
-```bash
-git worktree remove ../ieomd-<issue-number>
-git worktree prune
-```
-
-### Coordination Guidelines
-
-1. **Check for conflicts before starting** - Review which files each issue will touch
-2. **Merge sequentially** - Don't merge PRs simultaneously; let CI run between merges
-3. **Rebase after conflicts** - If main updates, rebase your branch before continuing
+- **Check for conflicts before starting** - Review which files each issue will touch
+- **Merge sequentially** - Don't merge PRs simultaneously; let CI run between merges
+- **Rebase after conflicts** - If main updates, rebase your branch before continuing
