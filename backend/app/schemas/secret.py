@@ -7,8 +7,9 @@ from pydantic import BaseModel, Field, PlainSerializer, field_validator, model_v
 
 from app.config import settings
 
-# Type for unlock presets that the server calculates
+# Types for server-side preset calculations
 UnlockPresetType = Literal["now", "15m", "1h", "24h", "1w"]
+ExpiryPresetType = Literal["15m", "1h", "24h", "1w"]
 
 
 def serialize_datetime_utc(dt: datetime) -> str:
@@ -51,7 +52,8 @@ class SecretCreate(BaseModel):
     auth_tag: str = Field(..., description="Base64 encoded 16-byte auth tag")
     unlock_at: datetime | None = None  # Optional when unlock_preset is provided
     unlock_preset: UnlockPresetType | None = None  # Server calculates unlock_at from this
-    expires_at: datetime
+    expires_at: datetime | None = None  # Optional when expiry_preset is provided
+    expiry_preset: ExpiryPresetType | None = None  # Server calculates expires_at from this
     edit_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     decrypt_token: str = Field(..., min_length=64, max_length=64, description="Hex token")
     pow_proof: PowProof | None = None  # Optional when using capability token
@@ -104,7 +106,9 @@ class SecretCreate(BaseModel):
 
     @field_validator("expires_at")
     @classmethod
-    def validate_expires_at(cls, v: datetime) -> datetime:
+    def validate_expires_at(cls, v: datetime | None) -> datetime | None:
+        if v is None:
+            return None  # Will be set from expiry_preset in model_validator
         now = datetime.now(UTC).replace(tzinfo=None)
         max_expiry = now + timedelta(days=settings.max_expiry_days)
 
@@ -116,10 +120,11 @@ class SecretCreate(BaseModel):
         return v_naive
 
     @model_validator(mode="after")
-    def validate_and_compute_unlock(self) -> "SecretCreate":
+    def validate_and_compute_dates(self) -> "SecretCreate":
+        now = datetime.now(UTC).replace(tzinfo=None)
+
         # Calculate unlock_at from preset if provided
         if self.unlock_preset is not None:
-            now = datetime.now(UTC).replace(tzinfo=None)
             if self.unlock_preset == "now":
                 self.unlock_at = now
             elif self.unlock_preset == "15m":
@@ -134,6 +139,32 @@ class SecretCreate(BaseModel):
         # Ensure unlock_at is set (either directly or from preset)
         if self.unlock_at is None:
             raise ValueError("Either unlock_at or unlock_preset must be provided")
+
+        # Validate preset-computed unlock_at against max bounds
+        # (min bounds are implicitly valid since presets are all >= now)
+        max_unlock = now + timedelta(days=settings.max_unlock_days)
+        if self.unlock_at > max_unlock:
+            raise ValueError(f"Unlock date cannot exceed {settings.max_unlock_days} days")
+
+        # Calculate expires_at from preset if provided (relative to unlock_at)
+        if self.expiry_preset is not None:
+            if self.expiry_preset == "15m":
+                self.expires_at = self.unlock_at + timedelta(minutes=15)
+            elif self.expiry_preset == "1h":
+                self.expires_at = self.unlock_at + timedelta(hours=1)
+            elif self.expiry_preset == "24h":
+                self.expires_at = self.unlock_at + timedelta(hours=24)
+            elif self.expiry_preset == "1w":
+                self.expires_at = self.unlock_at + timedelta(weeks=1)
+
+        # Ensure expires_at is set (either directly or from preset)
+        if self.expires_at is None:
+            raise ValueError("Either expires_at or expiry_preset must be provided")
+
+        # Validate preset-computed expires_at against max bounds
+        max_expiry = now + timedelta(days=settings.max_expiry_days)
+        if self.expires_at > max_expiry:
+            raise ValueError(f"Expiry date cannot exceed {settings.max_expiry_days} days")
 
         # Validate expiry constraints
         min_gap = timedelta(minutes=settings.min_expiry_gap_minutes)

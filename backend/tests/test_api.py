@@ -1353,6 +1353,163 @@ class TestUnlockPreset:
             assert time_diff < 60, f"unlock_at wrong for preset={preset}: {data['unlock_at']}"
 
 
+class TestExpiryPreset:
+    """Tests for server-side expiry_preset feature."""
+
+    def test_create_secret_with_expiry_preset(self, client):
+        """Test creating a secret with expiry_preset (server-calculated)."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Create secret with both unlock_preset and expiry_preset
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_preset": "now",
+                "expiry_preset": "1h",  # 1 hour after unlock
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 201
+        data = create_response.json()
+
+        # Verify times
+        unlock_at = datetime.fromisoformat(data["unlock_at"].rstrip("Z"))
+        expires_at = datetime.fromisoformat(data["expires_at"].rstrip("Z"))
+
+        # unlock_at should be now
+        time_diff = abs((utcnow() - unlock_at).total_seconds())
+        assert time_diff < 60, f"unlock_at is not recent: {data['unlock_at']}"
+
+        # expires_at should be 1 hour after unlock_at
+        gap = (expires_at - unlock_at).total_seconds()
+        expected_gap = 3600  # 1 hour
+        assert abs(gap - expected_gap) < 60, f"expiry gap wrong: {gap}s, expected ~{expected_gap}s"
+
+    def test_expiry_preset_all_values(self, client):
+        """Test all valid expiry_preset values."""
+        presets = ["15m", "1h", "24h", "1w"]
+        expected_gaps = {
+            "15m": timedelta(minutes=15),
+            "1h": timedelta(hours=1),
+            "24h": timedelta(hours=24),
+            "1w": timedelta(weeks=1),
+        }
+
+        for preset in presets:
+            test_data = generate_test_data()
+            payload_hash = compute_payload_hash(
+                test_data["ciphertext_bytes"],
+                test_data["iv_bytes"],
+                test_data["auth_tag_bytes"],
+            )
+
+            # Get challenge and solve PoW
+            challenge_response = client.post(
+                "/api/v1/challenges",
+                json={"payload_hash": payload_hash, "ciphertext_size": 100},
+            )
+            challenge = challenge_response.json()
+            counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+            # Create secret with expiry preset
+            create_response = client.post(
+                "/api/v1/secrets",
+                json={
+                    "ciphertext": test_data["ciphertext"],
+                    "iv": test_data["iv"],
+                    "auth_tag": test_data["auth_tag"],
+                    "unlock_preset": "now",
+                    "expiry_preset": preset,
+                    "edit_token": test_data["edit_token"],
+                    "decrypt_token": test_data["decrypt_token"],
+                    "pow_proof": {
+                        "challenge_id": challenge["challenge_id"],
+                        "nonce": challenge["nonce"],
+                        "counter": counter,
+                        "payload_hash": payload_hash,
+                    },
+                },
+            )
+
+            assert create_response.status_code == 201, f"Failed for preset={preset}"
+            data = create_response.json()
+
+            # Verify gap between unlock and expiry
+            unlock_at = datetime.fromisoformat(data["unlock_at"].rstrip("Z"))
+            expires_at = datetime.fromisoformat(data["expires_at"].rstrip("Z"))
+            actual_gap = expires_at - unlock_at
+            expected = expected_gaps[preset]
+            diff = abs((actual_gap - expected).total_seconds())
+            assert diff < 60, f"gap wrong for preset={preset}: {actual_gap}, expected {expected}"
+
+    def test_create_secret_without_expires_at_or_preset_rejected(self, client):
+        """Test that creating a secret without expires_at or expiry_preset is rejected."""
+        test_data = generate_test_data()
+        payload_hash = compute_payload_hash(
+            test_data["ciphertext_bytes"],
+            test_data["iv_bytes"],
+            test_data["auth_tag_bytes"],
+        )
+
+        # Get challenge and solve PoW
+        challenge_response = client.post(
+            "/api/v1/challenges",
+            json={"payload_hash": payload_hash, "ciphertext_size": 100},
+        )
+        challenge = challenge_response.json()
+        counter = solve_pow(challenge["nonce"], challenge["difficulty"], payload_hash)
+
+        # Try to create secret without expires_at or expiry_preset
+        create_response = client.post(
+            "/api/v1/secrets",
+            json={
+                "ciphertext": test_data["ciphertext"],
+                "iv": test_data["iv"],
+                "auth_tag": test_data["auth_tag"],
+                "unlock_preset": "now",
+                # No expires_at or expiry_preset
+                "edit_token": test_data["edit_token"],
+                "decrypt_token": test_data["decrypt_token"],
+                "pow_proof": {
+                    "challenge_id": challenge["challenge_id"],
+                    "nonce": challenge["nonce"],
+                    "counter": counter,
+                    "payload_hash": payload_hash,
+                },
+            },
+        )
+
+        assert create_response.status_code == 422
+        assert (
+            "expires_at" in str(create_response.json()).lower()
+            or "expiry_preset" in str(create_response.json()).lower()
+        )
+
+
 class TestRateLimitClientIP:
     """Tests for rate limiting client IP extraction."""
 

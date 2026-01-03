@@ -142,20 +142,25 @@ export default function Home() {
         ciphertext: secret.encrypted.ciphertext,
         iv: secret.encrypted.iv,
         auth_tag: secret.encrypted.authTag,
-        expires_at: expiresAt.toISOString(),
         edit_token: secret.editToken,
         decrypt_token: secret.decryptToken,
         pow_proof: powProof,
       }
 
-      // Send unlock_preset for server-calculated time (avoids clock skew), or unlock_at for custom
+      // Send presets for server-calculated times (avoids clock skew), or absolute times for custom
       if (unlockPreset !== 'custom') {
         createRequest.unlock_preset = unlockPreset
       } else {
         createRequest.unlock_at = unlockAt.toISOString()
       }
 
-      await createSecret(createRequest)
+      if (expiryPreset !== 'custom') {
+        createRequest.expiry_preset = expiryPreset
+      } else {
+        createRequest.expires_at = expiresAt.toISOString()
+      }
+
+      const response = await createSecret(createRequest)
 
       // Step 5: Generate shareable links
       const shareableLinks = generateShareableLinks(
@@ -165,8 +170,9 @@ export default function Home() {
       )
 
       setLinks(shareableLinks)
-      setCreatedUnlockAt(unlockAt)
-      setCreatedExpiresAt(expiresAt)
+      // Use server-provided times (accurate, no clock skew)
+      setCreatedUnlockAt(new Date(response.unlock_at))
+      setCreatedExpiresAt(new Date(response.expires_at))
       setStep('done')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unexpected error occurred')
