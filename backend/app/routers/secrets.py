@@ -337,6 +337,9 @@ async def get_status_by_id(
     Public status endpoint by secret ID.
 
     Intended for the vault dashboard to refresh status without requiring tokens.
+
+    Note: This endpoint intentionally reveals whether a secret exists and its timing metadata
+    (unlock/expires) to anyone with the secret ID; it is rate-limited to reduce enumeration risk.
     """
     secret = find_secret_by_id(db, secret_id)
     if not secret:
@@ -347,7 +350,6 @@ async def get_status_by_id(
 
     return SecretIdStatusResponse(
         id=secret.id,
-        exists=True,
         status=mapped_status,
         unlock_at=secret.unlock_at,
         expires_at=secret.expires_at,

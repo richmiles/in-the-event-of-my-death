@@ -308,6 +308,88 @@ class TestSecrets:
         assert "unlock_at" in data
         assert "expires_at" in data
 
+    def test_status_check_by_id_unlocked(self, client, db_session):
+        """Test the public status endpoint returns unlocked when past unlock_at."""
+        from app.services.secret_service import create_secret
+
+        test_data = generate_test_data()
+        unlock_at = utcnow() - timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=test_data["ciphertext"],
+            iv_b64=test_data["iv"],
+            auth_tag_b64=test_data["auth_tag"],
+            unlock_at=unlock_at,
+            edit_token=test_data["edit_token"],
+            decrypt_token=test_data["decrypt_token"],
+            expires_at=expires_at,
+        )
+
+        status_response = client.get(f"/api/v1/secrets/{secret.id}/status")
+
+        assert status_response.status_code == 200
+        data = status_response.json()
+        assert data["id"] == secret.id
+        assert data["exists"] is True
+        assert data["status"] == "unlocked"
+
+    def test_status_check_by_id_expired(self, client, db_session):
+        """Test the public status endpoint returns expired when past expires_at."""
+        from app.services.secret_service import create_secret
+
+        test_data = generate_test_data()
+        unlock_at = utcnow() - timedelta(days=8)
+        expires_at = utcnow() - timedelta(hours=1)
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=test_data["ciphertext"],
+            iv_b64=test_data["iv"],
+            auth_tag_b64=test_data["auth_tag"],
+            unlock_at=unlock_at,
+            edit_token=test_data["edit_token"],
+            decrypt_token=test_data["decrypt_token"],
+            expires_at=expires_at,
+        )
+
+        status_response = client.get(f"/api/v1/secrets/{secret.id}/status")
+
+        assert status_response.status_code == 200
+        data = status_response.json()
+        assert data["id"] == secret.id
+        assert data["exists"] is True
+        assert data["status"] == "expired"
+
+    def test_status_check_by_id_retrieved(self, client, db_session):
+        """Test the public status endpoint returns retrieved after one-time retrieval."""
+        from app.services.secret_service import create_secret, retrieve_secret
+
+        test_data = generate_test_data()
+        unlock_at = utcnow() - timedelta(hours=1)
+        expires_at = utcnow() + timedelta(days=7)
+
+        secret = create_secret(
+            db=db_session,
+            ciphertext_b64=test_data["ciphertext"],
+            iv_b64=test_data["iv"],
+            auth_tag_b64=test_data["auth_tag"],
+            unlock_at=unlock_at,
+            edit_token=test_data["edit_token"],
+            decrypt_token=test_data["decrypt_token"],
+            expires_at=expires_at,
+        )
+        retrieve_secret(db_session, secret)
+
+        status_response = client.get(f"/api/v1/secrets/{secret.id}/status")
+
+        assert status_response.status_code == 200
+        data = status_response.json()
+        assert data["id"] == secret.id
+        assert data["exists"] is True
+        assert data["status"] == "retrieved"
+
     def test_status_check_by_id_not_found(self, client):
         """Test the public status endpoint returns 404 for unknown secrets."""
         missing_id = str(uuid.uuid4())
