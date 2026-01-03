@@ -33,6 +33,18 @@ The identity model is **capability-based**: possession of a `vaultKey` is the "a
 - **No server-side visibility:** The server never needs access to plaintext, encryption keys, or a queryable index of vault contents.
 - **No cryptographic protection from XSS:** If attacker-controlled JavaScript runs in-origin, it can exfiltrate or misuse the `vaultKey`. This design assumes XSS prevention is mandatory.
 
+### Design Decision: Tracking Vault (Not Content Recall)
+
+The vault is a **tracking and management tool**, not a content storage vault. Key implications:
+
+- **No encryption keys stored:** The vault does NOT store `encryptionKey` or `viewToken` for secrets. Only `editToken` and metadata are tracked.
+- **Content recall is out of scope:** If a user loses their view link, they cannot recover the secret content via the vault—by design.
+- **Lower blast radius:** If `vaultKey` is compromised, the attacker learns which secrets exist and can extend/manage them, but cannot decrypt secret contents without the separate per-secret keys.
+- **Edit capability preserved:** Users can still extend unlock/expiry dates and track status via the `editToken`.
+- **Simpler security model:** Fewer keys in the vault means fewer keys to protect.
+
+This decision prioritizes security over convenience. Users who want content recall should keep their view links safe or use the recovery kit for the vault itself.
+
 ---
 
 ## 2. Terminology
@@ -102,8 +114,6 @@ IndexedDB preferred over localStorage:
 interface VaultEntry {
   secretId: string           // Server-side secret ID
   editToken: string          // Capability token for editing
-  viewToken?: string         // Optional: stored for reference
-  encryptionKey: string      // Secret decryption key (from URL fragment; never sent to server)
   createdAt: string          // ISO timestamp
   unlockAt: string           // When secret unlocks
   expiresAt: string          // When secret expires
@@ -161,7 +171,7 @@ Body: { ciphertext: "..." }
 **Why syncToken is inside the encrypted blob:**
 - Paired devices need the `syncToken` to write
 - Including it in the encrypted vault means new devices get it automatically on sync
-- Server only stores the hash, so compromise doesn't expose the raw token
+- Server only stores the hash, so server-side storage never contains the raw token
 
 ### 5.3 Sync Protocol
 
@@ -350,6 +360,8 @@ Device B syncs vault from server
 
 ## 10. Open Questions
 
+### Product & UX
+
 1. **Sync frequency:** Push on every change? Pull on app open? WebSocket for real-time?
 
 2. **Conflict resolution:** Last-write-wins? Entry-level merge? Show conflict to user?
@@ -361,6 +373,30 @@ Device B syncs vault from server
 5. **Migration:** How do existing users (with edit links, no vault) transition?
 
 6. **Secret status sync:** Should vault poll server for secret status updates, or only on user action?
+
+### Security & Architecture
+
+7. **Authenticated reads:** Should `GET /api/vault/{vaultId}` require `syncToken`? Currently unauthenticated reads allow any client with `vaultKey` to pull the blob. Requiring auth prevents a leaked `vaultId` from being useful alone, but complicates pairing (new device needs `syncToken` before it can read).
+
+8. **Device revocation:** How do we handle a compromised device? Options:
+   - Rotate `syncToken` (requires all other devices to re-sync)
+   - Rotate `vaultKey` (requires re-encrypting entire vault, re-pairing all devices)
+   - No explicit revocation (accept risk, rely on user rotating secrets)
+
+9. **Deletion semantics:** When a secret is deleted from the vault:
+   - **Tombstone approach:** Mark entry as `deleted: true` with `deletedAt` timestamp; merge logic respects tombstones; periodically compact
+   - **Hard delete:** Remove entry entirely; risk of "resurrection" on merge from stale device
+   - Recommendation: Start with tombstones, add compaction later
+
+10. **Operational hygiene:**
+    - Server log retention policy (minimize correlatability)
+    - Blob TTL for abandoned vaults (storage cost vs. user expectation)
+    - Rate limiting on reads (prevent enumeration attempts)
+
+11. **Rotation strategies:**
+    - **Algorithm upgrade:** How to migrate from AES-256-GCM v1 to future schemes? (Schema version in AAD helps detect, but migration path unclear)
+    - **vaultKey rotation:** Is this ever needed? Would require re-encrypting blob, updating all paired devices
+    - **syncToken rotation:** Easier than vaultKey rotation; update token inside blob, push, server updates hash
 
 ---
 
@@ -408,6 +444,7 @@ Device B syncs vault from server
 | 2025-01-03 | Claude + Rich | Initial draft from design discussion |
 | 2026-01-03 | Codex | Clarify crypto, pairing security model, and sync semantics |
 | 2026-01-03 | Claude | Add syncToken bootstrap flow based on Codex clarification |
+| 2026-01-03 | Claude | Document tracking vault decision; remove encryptionKey from schema; add security/architecture questions |
 
 ---
 
