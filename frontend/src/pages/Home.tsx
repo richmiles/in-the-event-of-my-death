@@ -23,7 +23,7 @@ export default function Home() {
   const [progress, setProgress] = useState<string>('')
   const [links, setLinks] = useState<ShareableLinks | null>(null)
   const [copied, setCopied] = useState<'edit' | 'view' | null>(null)
-  const [canShare] = useState(() => typeof navigator !== 'undefined' && !!navigator.share)
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share
 
   // Expiry date state
   const [expiryPreset, setExpiryPreset] = useState<ExpiryPreset>('1h')
@@ -194,11 +194,9 @@ export default function Home() {
         title: 'Someone shared a secret with you',
         url,
       })
-    } catch (err) {
-      // User cancelled or share failed - ignore
-      if (err instanceof Error && err.name !== 'AbortError') {
-        console.error('Share failed:', err)
-      }
+    } catch {
+      // User cancelled or share failed - silently ignore
+      // AbortError is expected when user dismisses share sheet
     }
   }
 
@@ -290,7 +288,11 @@ export default function Home() {
                   {copied === 'view' ? 'Copied!' : 'Copy'}
                 </button>
                 {canShare && (
-                  <button onClick={() => shareLink(links.viewLink)} className="share-button">
+                  <button
+                    onClick={() => shareLink(links.viewLink)}
+                    className="share-button"
+                    aria-label="Share secret link"
+                  >
                     Share
                   </button>
                 )}
