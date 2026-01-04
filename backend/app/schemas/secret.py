@@ -228,9 +228,18 @@ class SecretEditResponse(BaseModel):
 
 class SecretStatusResponse(BaseModel):
     exists: bool
-    status: str  # "pending" | "available" | "expired" | "retrieved"
+    status: Literal["pending", "available", "expired", "retrieved", "not_found"]
     unlock_at: UTCDateTime | None = None
     expires_at: UTCDateTime | None = None  # None only when exists=False
+
+
+class SecretIdStatusResponse(BaseModel):
+    id: str
+    # Always True: non-existent secrets return 404 (kept for API consistency).
+    exists: Literal[True] = True
+    status: Literal["pending", "unlocked", "expired", "retrieved"]
+    unlock_at: UTCDateTime
+    expires_at: UTCDateTime
 
 
 class SecretRetrieveResponse(BaseModel):
