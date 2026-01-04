@@ -79,7 +79,7 @@ def parse_utc_datetime(value: str) -> datetime:
     return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
 
 
-def compute_unlock_at_for_environment(desired_unlock_at: datetime, api_error: ApiError) -> datetime | None:
+def compute_unlock_at_for_environment(api_error: ApiError) -> datetime | None:
     """
     If the API rejected unlock_at due to environment min unlock policy, return an adjusted unlock_at.
     """
@@ -92,10 +92,7 @@ def compute_unlock_at_for_environment(desired_unlock_at: datetime, api_error: Ap
 
     min_minutes = int(m.group(1))
     now = datetime.now(timezone.utc)
-    adjusted = now + timedelta(minutes=min_minutes, seconds=5)
-    if adjusted > desired_unlock_at:
-        return adjusted
-    return None
+    return now + timedelta(minutes=min_minutes, seconds=MIN_UNLOCK_BUFFER_SECONDS)
 
 
 def http_get(
@@ -332,8 +329,8 @@ def run_full_smoke_test(base_url: str) -> bool:
     # Step 4: Create secret
     # Keep unlock short when allowed (faster smoke), but adapt if env enforces a minimum.
     now = datetime.now(timezone.utc)
-    unlock_at = now + timedelta(seconds=20)
-    expires_at = unlock_at + timedelta(minutes=65)
+    unlock_at = now + timedelta(seconds=SHORT_UNLOCK_SECONDS)
+    expires_at = unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)
 
     log("Creating secret")
     create_payload = {
@@ -355,11 +352,11 @@ def run_full_smoke_test(base_url: str) -> bool:
     try:
         secret = api_request(base_url, "POST", "/secrets", data=create_payload)
     except ApiError as e:
-        adjusted_unlock_at = compute_unlock_at_for_environment(unlock_at, e)
+        adjusted_unlock_at = compute_unlock_at_for_environment(e)
         if not adjusted_unlock_at:
             raise
         unlock_at = adjusted_unlock_at
-        expires_at = unlock_at + timedelta(minutes=65)
+        expires_at = unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)
         create_payload["unlock_at"] = unlock_at.strftime("%Y-%m-%dT%H:%M:%SZ")
         create_payload["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%SZ")
         log(f"Create rejected; retrying with unlock_at={create_payload['unlock_at']}")
@@ -430,9 +427,9 @@ def run_full_smoke_test(base_url: str) -> bool:
     except (KeyError, TypeError, ValueError):
         seconds_until_unlock = 9999
 
-    if 0 < seconds_until_unlock <= 90:
+    if 0 < seconds_until_unlock <= UNLOCK_SOON_MAX_SECONDS:
         log("Waiting briefly for unlock to verify status mapping")
-        deadline = time.time() + 120
+        deadline = time.time() + UNLOCK_POLL_DEADLINE_SECONDS
         while time.time() < deadline:
             current = api_request(
                 base_url,
@@ -448,7 +445,9 @@ def run_full_smoke_test(base_url: str) -> bool:
                     )
                     return False
                 break
-            time.sleep(2)
+            time.sleep(UNLOCK_POLL_SLEEP_SECONDS)
+        else:
+            log("Deadline reached without unlock; skipping status mapping verification")
 
     # Note: we intentionally don't clean up created secrets; they expire naturally.
     log("Full smoke test PASSED")
