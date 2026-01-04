@@ -91,16 +91,17 @@ When leaving review feedback with `gh pr review`, prefer `--body-file` to avoid 
 tmpfile="$(mktemp)"
 cat > "$tmpfile" <<'EOF'
 Summary:
-- Looks good overall.
+- Looks good overall
 
 Requested changes:
-- Please add a test for the new edge case.
+- Please add a test for the new edge case
 EOF
 
 gh pr review 123 --comment --body-file "$tmpfile"
 # or:
 gh pr review 123 --request-changes --body-file "$tmpfile"
 gh pr review 123 --approve --body-file "$tmpfile"
+rm -f "$tmpfile"
 ```
 
 ---

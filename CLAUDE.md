@@ -49,13 +49,14 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
     - Looks good overall
 
     Requested changes:
-    - Please add a test for the new edge case.
+    - Please add a test for the new edge case
     EOF
 
     gh pr review 123 --comment --body-file "$tmpfile"
     # or:
     gh pr review 123 --request-changes --body-file "$tmpfile"
     gh pr review 123 --approve --body-file "$tmpfile"
+    rm -f "$tmpfile"
     ```
   - Workflows: `gh workflow run <name>`, `gh run list`, `gh run view <run-id>`
   - Projects: `gh project item-add <project-number> --owner richmiles --url <issue-url>`
