@@ -2,15 +2,19 @@
 """
 Smoke test for IEOMD staging/production deployments.
 
-Tests the full secret creation flow:
+This script is intentionally a deploy guardrail:
+- Fast (<~3m typical)
+- Deterministic where possible
+- Actionable failures (step name, HTTP status/body preview)
+
+Flow (default):
 1. Health check
-2. Request PoW challenge
-3. Solve PoW
-4. Create secret
-5. Check secret status via edit token
-6. Edit secret dates via edit token and re-check status
-7. Check secret status via decrypt token
-8. Check secret status via public id
+2. Web serving + asset load (optional via --skip-web)
+3. Secret creation (PoW + POST /secrets)
+4. Edit-token status check
+5. Edit flow (PUT /secrets/edit + re-check status)
+6. Decrypt-token status check
+7. Public status-by-id check
 
 Usage:
     ./scripts/smoke-test.py https://staging.example.com
@@ -21,15 +25,20 @@ import argparse
 import base64
 import hashlib
 import json
+import random
 import re
 import secrets
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
+
+SkipCheck = Callable[["SmokeContext"], str | None]
 
 
 class ApiError(RuntimeError):
@@ -45,6 +54,14 @@ MIN_UNLOCK_BUFFER_SECONDS = 5
 UNLOCK_SOON_MAX_SECONDS = 90
 UNLOCK_POLL_DEADLINE_SECONDS = 120
 UNLOCK_POLL_SLEEP_SECONDS = 2
+DEFAULT_TIMEOUT_SECONDS = 30.0
+DEFAULT_RETRIES = 2
+DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
+# Used when surfacing API error bodies (text) for debugging without log spam.
+MAX_ERROR_BODY_CHARS = 10_000
+# Used when surfacing raw HTTP bodies (bytes) as a preview in error messages.
+BODY_PREVIEW_BYTES = 200
+MAX_BACKOFF_SECONDS = 4.0
 
 
 def log(msg: str) -> None:
@@ -52,28 +69,117 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
 
 
-def api_request(
-    base_url: str,
-    method: str,
-    path: str,
-    data: dict | None = None,
-    headers: dict[str, str] | None = None,
-) -> dict:
-    """Make an API request and return JSON response."""
-    url = f"{base_url}/api/v1{path}"
-    req_headers = {"Content-Type": "application/json"}
-    if headers:
-        req_headers.update(headers)
+def _preview_bytes(value: bytes, limit: int = BODY_PREVIEW_BYTES) -> bytes:
+    if len(value) <= limit:
+        return value
+    return value[:limit]
 
-    body = json.dumps(data).encode() if data else None
-    request = Request(url, data=body, headers=req_headers, method=method)
 
-    try:
-        with urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode())
-    except HTTPError as e:
-        error_body = e.read().decode() if e.fp else ""
-        raise ApiError(e.code, error_body) from e
+def _decode_limited(value: bytes, max_chars: int = MAX_ERROR_BODY_CHARS) -> str:
+    decoded = value.decode("utf-8", errors="replace")
+    if len(decoded) <= max_chars:
+        return decoded
+    return decoded[:max_chars] + "…"
+
+
+def _is_retryable_status(status_code: int) -> bool:
+    return status_code in {408, 425, 429, 502, 503, 504, 522, 524}
+
+
+@dataclass
+class HttpClient:
+    base_url: str
+    timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS
+    retries: int = DEFAULT_RETRIES
+    retry_backoff_seconds: float = DEFAULT_RETRY_BACKOFF_SECONDS
+
+    def request(
+        self,
+        method: str,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        body: bytes | None = None,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, dict[str, str], bytes]:
+        effective_timeout = self.timeout_seconds if timeout_seconds is None else timeout_seconds
+        req_headers = headers or {}
+
+        last_error: Exception | None = None
+        max_attempts = max(1, self.retries + 1)
+        for attempt in range(1, max_attempts + 1):
+            try:
+                request = Request(url, data=body, headers=req_headers, method=method)
+                try:
+                    with urlopen(request, timeout=effective_timeout) as response:
+                        return response.getcode(), dict(response.headers.items()), response.read()
+                except HTTPError as e:
+                    error_body = e.read() if e.fp else b""
+                    resp_headers = dict(e.headers.items()) if e.headers else {}
+                    if attempt < max_attempts and _is_retryable_status(e.code):
+                        last_error = e
+                        self._sleep_backoff(attempt)
+                        continue
+                    return e.code, resp_headers, error_body
+            except (URLError, TimeoutError) as e:
+                last_error = e
+                if attempt < max_attempts:
+                    self._sleep_backoff(attempt)
+                    continue
+                raise RuntimeError(f"Network error after {attempt} attempts: {e}") from e
+
+        # Defensive safety net: loop should always return or raise above.
+        raise RuntimeError(f"Unexpected HTTP client failure: {last_error!r}")
+
+    def api_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        data: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+        timeout_seconds: float | None = None,
+    ) -> dict[str, Any]:
+        url = f"{self.base_url}/api/v1{path}"
+        req_headers: dict[str, str] = {"Content-Type": "application/json"}
+        if headers:
+            req_headers.update(headers)
+
+        body_bytes = json.dumps(data).encode() if data is not None else None
+        status, _, body = self.request(
+            method,
+            url,
+            headers=req_headers,
+            body=body_bytes,
+            timeout_seconds=timeout_seconds,
+        )
+        if status < 200 or status >= 300:
+            raise ApiError(status, _decode_limited(body))
+        try:
+            return json.loads(body.decode())
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"Invalid JSON response from {method} {path}: preview={_preview_bytes(body)!r}"
+            ) from e
+
+    def get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        timeout_seconds: float | None = None,
+    ) -> tuple[int, dict[str, str], bytes]:
+        return self.request(
+            "GET",
+            url,
+            headers=headers,
+            timeout_seconds=timeout_seconds,
+        )
+
+    def _sleep_backoff(self, attempt: int) -> None:
+        base = self.retry_backoff_seconds * (2 ** (attempt - 1))
+        jitter = random.random() * self.retry_backoff_seconds
+        time.sleep(min(MAX_BACKOFF_SECONDS, base + jitter))
 
 
 def parse_utc_datetime(value: str) -> datetime:
@@ -132,21 +238,6 @@ def compute_unlock_at_for_environment(api_error: ApiError) -> datetime | None:
     return now + timedelta(minutes=min_minutes, seconds=MIN_UNLOCK_BUFFER_SECONDS)
 
 
-def http_get(
-    url: str,
-    timeout: float = 30.0,
-    headers: dict[str, str] | None = None,
-) -> tuple[int, dict[str, str], bytes]:
-    req = Request(url, headers=headers or {}, method="GET")
-    try:
-        with urlopen(req, timeout=timeout) as response:
-            return response.getcode(), dict(response.headers.items()), response.read()
-    except HTTPError as e:
-        error_body = e.read() if e.fp else b""
-        resp_headers = dict(e.headers.items()) if e.headers else {}
-        return e.code, resp_headers, error_body
-
-
 class _HTMLAssetParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -165,21 +256,20 @@ class _HTMLAssetParser(HTMLParser):
             href = attrs_dict.get("href")
             if not href:
                 return
-            # Vite commonly uses <link rel="modulepreload" href="..."> for JS chunks.
             if any(token in rel for token in ("stylesheet", "modulepreload", "preload")):
                 self.asset_urls.append(href)
 
 
-def check_web_serving(base_url: str) -> None:
+def check_web_serving(client: HttpClient) -> None:
     """
     Verify the web frontend is being served.
 
     - GET / returns 200 and looks like HTML
     - At least one referenced same-origin asset (script/css) loads (200)
     """
-    homepage_url = f"{base_url}/"
+    homepage_url = f"{client.base_url}/"
     log(f"Checking web homepage: {homepage_url}")
-    status, resp_headers, body = http_get(homepage_url, timeout=20.0)
+    status, resp_headers, body = client.get(homepage_url, timeout_seconds=20.0)
     content_type_header = next(
         (v for k, v in resp_headers.items() if k.lower() == "content-type"),
         "",
@@ -187,7 +277,7 @@ def check_web_serving(base_url: str) -> None:
     if status != 200:
         raise RuntimeError(
             f"Homepage returned non-200: {status} "
-            f"(content_type={content_type_header!r}, body_preview={body[:200]!r})"
+            f"(content_type={content_type_header!r}, body_preview={_preview_bytes(body)!r})"
         )
 
     content_type = content_type_header.lower()
@@ -202,17 +292,17 @@ def check_web_serving(base_url: str) -> None:
         if len(body) < 200:
             raise RuntimeError(
                 "Homepage HTML missing expected root marker and is unexpectedly small "
-                f"({len(body)} bytes, preview={body[:200]!r})"
+                f"({len(body)} bytes, preview={_preview_bytes(body)!r})"
             )
-        log("WARNING: Homepage HTML missing expected root marker (id=\"root\"); continuing")
+        log('WARNING: Homepage HTML missing expected root marker (id="root"); continuing')
 
     parser = _HTMLAssetParser()
     parser.feed(body_text)
 
-    base_parsed = urlparse(base_url)
+    base_parsed = urlparse(client.base_url)
     base_netloc = base_parsed.netloc
     if not base_netloc:
-        raise RuntimeError(f"Unable to parse netloc from base_url: {base_url!r}")
+        raise RuntimeError(f"Unable to parse netloc from base_url: {client.base_url!r}")
 
     def looks_like_static_asset(path: str) -> bool:
         lower = path.lower()
@@ -231,7 +321,7 @@ def check_web_serving(base_url: str) -> None:
             continue
         if not looks_like_static_asset(parsed.path):
             continue
-        # "Same-origin" for smoke test purposes: same scheme/host/port.
+        # Same-origin for smoke-test purposes: same scheme/host/port.
         if parsed.netloc != base_netloc:
             continue
         resolved_assets.append(absolute)
@@ -248,17 +338,16 @@ def check_web_serving(base_url: str) -> None:
             f"(base_netloc={base_netloc!r}, found={raw_assets!r})"
         )
 
-    # Fetch at most 1 asset to keep runtime low while still catching broken static hosting.
     for asset_url in unique_assets[:1]:
         log(f"Fetching asset: {asset_url}")
-        asset_status, _, asset_body = http_get(
+        asset_status, _, asset_body = client.get(
             asset_url,
-            timeout=20.0,
             headers={"Accept": "*/*"},
+            timeout_seconds=20.0,
         )
         if asset_status != 200:
             raise RuntimeError(
-                f"Asset returned non-200: {asset_status} ({asset_url}, preview={asset_body[:200]!r})"
+                f"Asset returned non-200: {asset_status} ({asset_url}, preview={_preview_bytes(asset_body)!r})"
             )
         if not asset_body:
             raise RuntimeError(f"Asset returned empty body: {asset_url}")
@@ -266,19 +355,19 @@ def check_web_serving(base_url: str) -> None:
     log("Web checks passed (assets fetched: 1)")
 
 
-def wait_for_health(base_url: str, max_attempts: int = 30, delay: float = 2.0) -> bool:
+def wait_for_health(client: HttpClient, max_attempts: int = 30, delay: float = 2.0) -> bool:
     """Wait for /health to return healthy status."""
-    url = f"{base_url}/health"
+    url = f"{client.base_url}/health"
 
     for attempt in range(1, max_attempts + 1):
         try:
-            request = Request(url)
-            with urlopen(request, timeout=10) as response:
-                data = json.loads(response.read().decode())
+            status, _, body = client.get(url, timeout_seconds=10.0)
+            if status == 200:
+                data = json.loads(body.decode())
                 if data.get("status") == "healthy":
                     log(f"Health check passed (attempt {attempt})")
                     return True
-        except (HTTPError, URLError, json.JSONDecodeError, TimeoutError):
+        except (json.JSONDecodeError, RuntimeError):
             pass
 
         if attempt < max_attempts:
@@ -311,7 +400,6 @@ def solve_pow(nonce: str, payload_hash: str, difficulty: int) -> int:
 
         counter += 1
 
-        # Progress update every million attempts
         if counter % 1_000_000 == 0:
             elapsed = time.time() - start_time
             log(f"PoW progress: {counter:,} attempts ({counter/elapsed:.0f} H/s)")
@@ -323,7 +411,6 @@ def generate_test_secret() -> tuple[str, str, str, str]:
 
     Returns (ciphertext_b64, iv_b64, auth_tag_b64, payload_hash)
     """
-    # Small ciphertext for minimal PoW difficulty
     ciphertext = b"smoke-test-" + secrets.token_bytes(21)  # 32 bytes total
     iv = secrets.token_bytes(12)
     auth_tag = secrets.token_bytes(16)
@@ -332,39 +419,136 @@ def generate_test_secret() -> tuple[str, str, str, str]:
     iv_b64 = base64.b64encode(iv).decode()
     auth_tag_b64 = base64.b64encode(auth_tag).decode()
 
-    # Compute payload hash (same as backend)
     payload_hash = hashlib.sha256(ciphertext + iv + auth_tag).hexdigest()
 
     return ciphertext_b64, iv_b64, auth_tag_b64, payload_hash
 
 
-def run_full_smoke_test(base_url: str) -> bool:
-    """Run the complete smoke test flow."""
-    log("Starting full smoke test")
+@dataclass
+class SmokeContext:
+    client: HttpClient
+    max_health_attempts: int
 
-    # Step 1: Generate test data
+    edit_token: str | None = None
+    decrypt_token: str | None = None
+    secret_id: str | None = None
+    unlock_at: datetime | None = None
+    expires_at: datetime | None = None
+    decrypt_status: dict[str, Any] | None = None
+
+    def require_edit_token(self) -> str:
+        if not self.edit_token:
+            raise RuntimeError("Missing edit_token (step ordering bug)")
+        return self.edit_token
+
+    def require_decrypt_token(self) -> str:
+        if not self.decrypt_token:
+            raise RuntimeError("Missing decrypt_token (step ordering bug)")
+        return self.decrypt_token
+
+    def require_secret_id(self) -> str:
+        if not self.secret_id:
+            raise RuntimeError("Missing secret_id (step ordering bug)")
+        return self.secret_id
+
+    def require_unlock_at(self) -> datetime:
+        if not self.unlock_at:
+            raise RuntimeError("Missing unlock_at (step ordering bug)")
+        return self.unlock_at
+
+    def require_expires_at(self) -> datetime:
+        if not self.expires_at:
+            raise RuntimeError("Missing expires_at (step ordering bug)")
+        return self.expires_at
+
+    def require_decrypt_status(self) -> dict[str, Any]:
+        if self.decrypt_status is None:
+            raise RuntimeError("Missing decrypt_status (step ordering bug)")
+        return self.decrypt_status
+
+
+@dataclass(frozen=True)
+class Step:
+    name: str
+    run: Callable[[SmokeContext], None]
+    # Return `None` to run the step; return a string to skip with that reason.
+    skip_reason: SkipCheck | None = None
+
+
+@dataclass(frozen=True)
+class StepResult:
+    name: str
+    status: str  # passed|skipped|failed
+    seconds: float
+    detail: str | None = None
+
+
+def _print_summary(results: list[StepResult], total_seconds: float) -> None:
+    log("Summary:")
+    for result in results:
+        suffix = f" - {result.detail}" if result.detail else ""
+        log(f"  {result.status.upper():7} {result.name} ({result.seconds:.2f}s){suffix}")
+    log(f"Total: {total_seconds:.2f}s")
+
+
+def run_steps(ctx: SmokeContext, steps: list[Step]) -> bool:
+    results: list[StepResult] = []
+    overall_start = time.time()
+
+    for step in steps:
+        reason = step.skip_reason(ctx) if step.skip_reason else None
+        if reason:
+            log(f"SKIP: {step.name}: {reason}")
+            results.append(StepResult(step.name, "skipped", 0.0, reason))
+            continue
+
+        log(f"STEP: {step.name}")
+        start = time.time()
+        try:
+            step.run(ctx)
+        except Exception as e:
+            elapsed = time.time() - start
+            results.append(StepResult(step.name, "failed", elapsed, str(e)))
+            _print_summary(results, time.time() - overall_start)
+            return False
+
+        elapsed = time.time() - start
+        results.append(StepResult(step.name, "passed", elapsed))
+        log(f"OK: {step.name} ({elapsed:.2f}s)")
+
+    _print_summary(results, time.time() - overall_start)
+    return True
+
+
+def step_health(ctx: SmokeContext) -> None:
+    log(f"Checking health: {ctx.client.base_url}/health")
+    if not wait_for_health(ctx.client, max_attempts=ctx.max_health_attempts):
+        raise RuntimeError("Health check failed")
+
+
+def step_web(ctx: SmokeContext) -> None:
+    check_web_serving(ctx.client)
+
+
+def step_create_secret(ctx: SmokeContext) -> None:
     log("Generating test secret data")
     ciphertext_b64, iv_b64, auth_tag_b64, payload_hash = generate_test_secret()
     ciphertext_size = len(base64.b64decode(ciphertext_b64))
-    edit_token = secrets.token_hex(32)
-    decrypt_token = secrets.token_hex(32)
 
-    # Step 2: Request PoW challenge
+    ctx.edit_token = secrets.token_hex(32)
+    ctx.decrypt_token = secrets.token_hex(32)
+
     log("Requesting PoW challenge")
-    challenge = api_request(
-        base_url,
+    challenge = ctx.client.api_json(
         "POST",
         "/challenges",
         data={"payload_hash": payload_hash, "ciphertext_size": ciphertext_size},
     )
     log(f"Got challenge: difficulty={challenge['difficulty']}, expires={challenge['expires_at']}")
 
-    # Step 3: Solve PoW
     log(f"Solving PoW (difficulty={challenge['difficulty']})")
     counter = solve_pow(challenge["nonce"], payload_hash, challenge["difficulty"])
 
-    # Step 4: Create secret
-    # Keep unlock safely in the future to avoid flakiness during slow runs.
     now = datetime.now(timezone.utc)
     unlock_at = (now + timedelta(minutes=DEFAULT_UNLOCK_MINUTES)).replace(microsecond=0)
     expires_at = (unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)).replace(microsecond=0)
@@ -376,8 +560,8 @@ def run_full_smoke_test(base_url: str) -> bool:
         "auth_tag": auth_tag_b64,
         "unlock_at": format_utc_datetime(unlock_at),
         "expires_at": format_utc_datetime(expires_at),
-        "edit_token": edit_token,
-        "decrypt_token": decrypt_token,
+        "edit_token": ctx.require_edit_token(),
+        "decrypt_token": ctx.require_decrypt_token(),
         "pow_proof": {
             "challenge_id": challenge["challenge_id"],
             "nonce": challenge["nonce"],
@@ -387,7 +571,7 @@ def run_full_smoke_test(base_url: str) -> bool:
     }
 
     try:
-        secret = api_request(base_url, "POST", "/secrets", data=create_payload)
+        secret = ctx.client.api_json("POST", "/secrets", data=create_payload)
     except ApiError as e:
         adjusted_unlock_at = compute_unlock_at_for_environment(e)
         if not adjusted_unlock_at:
@@ -397,65 +581,58 @@ def run_full_smoke_test(base_url: str) -> bool:
         create_payload["unlock_at"] = format_utc_datetime(unlock_at)
         create_payload["expires_at"] = format_utc_datetime(expires_at)
         log(f"Create rejected; retrying with unlock_at={create_payload['unlock_at']}")
-        secret = api_request(base_url, "POST", "/secrets", data=create_payload)
+        secret = ctx.client.api_json("POST", "/secrets", data=create_payload)
 
-    secret_id = secret["secret_id"]
-    created_unlock_at = parse_utc_datetime(secret["unlock_at"])
-    created_expires_at = parse_utc_datetime(secret["expires_at"])
-    log(f"Secret created: id={secret_id}, unlock_at={secret['unlock_at']}")
+    ctx.secret_id = secret["secret_id"]
+    ctx.unlock_at = parse_utc_datetime(secret["unlock_at"])
+    ctx.expires_at = parse_utc_datetime(secret["expires_at"])
+    log(f"Secret created: id={ctx.secret_id}, unlock_at={secret['unlock_at']}")
 
-    # Step 5: Check status via edit token
+
+def step_edit_status(ctx: SmokeContext) -> None:
     log("Checking secret status via edit token")
-    status = api_request(
-        base_url,
+    status = ctx.client.api_json(
         "GET",
         "/secrets/edit/status",
-        headers={"Authorization": f"Bearer {edit_token}"},
+        headers={"Authorization": f"Bearer {ctx.require_edit_token()}"},
     )
-
     if not status.get("exists"):
-        log("ERROR: Secret not found via edit token")
-        return False
-
+        raise RuntimeError("Secret not found via edit token")
     if status.get("status") != "pending":
-        log(f"ERROR: Expected status 'pending', got '{status.get('status')}'")
-        return False
+        raise RuntimeError(f"Expected status 'pending', got '{status.get('status')}'")
 
     status_unlock_at = parse_utc_datetime(status["unlock_at"])
     status_expires_at = parse_utc_datetime(status["expires_at"])
     if not assert_timestamps_match(
         "Status timestamps do not match create response",
-        created_unlock_at,
-        created_expires_at,
+        ctx.require_unlock_at(),
+        ctx.require_expires_at(),
         status_unlock_at,
         status_expires_at,
     ):
-        return False
+        raise RuntimeError("Status timestamps mismatch")
 
     log(f"Status verified: exists={status['exists']}, status={status['status']}")
 
-    # Step 6: Edit secret dates and re-check status remains pending
+
+def step_edit_flow(ctx: SmokeContext) -> None:
     log("Editing secret dates via edit token")
+    created_unlock_at = ctx.require_unlock_at()
+    created_expires_at = ctx.require_expires_at()
+
     new_unlock_at = (created_unlock_at + timedelta(minutes=5)).replace(microsecond=0)
     new_expires_at = (created_expires_at + timedelta(minutes=5)).replace(microsecond=0)
 
     if new_unlock_at >= new_expires_at:
-        log("ERROR: Computed invalid edited timestamps (unlock >= expiry)")
-        return False
-
+        raise RuntimeError("Computed invalid edited timestamps (unlock >= expiry)")
     if (new_expires_at - new_unlock_at) < timedelta(minutes=15):
-        log("ERROR: Computed invalid edited timestamps (gap < 15 minutes)")
-        return False
+        raise RuntimeError("Computed invalid edited timestamps (gap < 15 minutes)")
 
-    edited = api_request(
-        base_url,
+    edited = ctx.client.api_json(
         "PUT",
         "/secrets/edit",
-        headers={"Authorization": f"Bearer {edit_token}"},
-        data={
-            "unlock_at": format_utc_datetime(new_unlock_at),
-            "expires_at": format_utc_datetime(new_expires_at),
-        },
+        headers={"Authorization": f"Bearer {ctx.require_edit_token()}"},
+        data={"unlock_at": format_utc_datetime(new_unlock_at), "expires_at": format_utc_datetime(new_expires_at)},
     )
 
     edited_unlock_at = parse_utc_datetime(edited["unlock_at"])
@@ -467,27 +644,21 @@ def run_full_smoke_test(base_url: str) -> bool:
         edited_unlock_at,
         edited_expires_at,
     ):
-        return False
+        raise RuntimeError("Edit response timestamps mismatch")
 
     if edited_unlock_at <= created_unlock_at or edited_expires_at <= created_expires_at:
-        log("ERROR: Edit did not postpone timestamps as expected")
-        return False
+        raise RuntimeError("Edit did not postpone timestamps as expected")
 
     log("Re-checking secret edit status after edit")
-    status2 = api_request(
-        base_url,
+    status2 = ctx.client.api_json(
         "GET",
         "/secrets/edit/status",
-        headers={"Authorization": f"Bearer {edit_token}"},
+        headers={"Authorization": f"Bearer {ctx.require_edit_token()}"},
     )
-
     if not status2.get("exists"):
-        log("ERROR: Secret not found via edit token after edit")
-        return False
-
+        raise RuntimeError("Secret not found via edit token after edit")
     if status2.get("status") != "pending":
-        log(f"ERROR: Expected status 'pending' after edit, got '{status2.get('status')}'")
-        return False
+        raise RuntimeError(f"Expected status 'pending' after edit, got '{status2.get('status')}'")
 
     status2_unlock_at = parse_utc_datetime(status2["unlock_at"])
     status2_expires_at = parse_utc_datetime(status2["expires_at"])
@@ -498,75 +669,76 @@ def run_full_smoke_test(base_url: str) -> bool:
         status2_unlock_at,
         status2_expires_at,
     ):
-        return False
+        raise RuntimeError("Status timestamps did not reflect edit")
 
-    # Step 7: Check status via decrypt token (should not consume the secret)
+    ctx.unlock_at = edited_unlock_at
+    ctx.expires_at = edited_expires_at
+
+
+def step_decrypt_status(ctx: SmokeContext) -> None:
     log("Checking secret status via decrypt token")
-    decrypt_status = api_request(
-        base_url,
+    decrypt_status = ctx.client.api_json(
         "GET",
         "/secrets/status",
-        headers={"Authorization": f"Bearer {decrypt_token}"},
+        headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
     )
-
     if not decrypt_status.get("exists"):
-        log("ERROR: Secret not found via decrypt token")
-        return False
-
+        raise RuntimeError("Secret not found via decrypt token")
     if decrypt_status.get("status") not in ("pending", "available"):
-        log(f"ERROR: Unexpected decrypt status '{decrypt_status.get('status')}'")
-        return False
+        raise RuntimeError(f"Unexpected decrypt status '{decrypt_status.get('status')}'")
+    ctx.decrypt_status = decrypt_status
 
-    # Step 8: Check public status via secret ID and assert consistent status mapping
+
+def step_public_status(ctx: SmokeContext) -> None:
     log("Checking secret status via public ID endpoint")
-    public_status = api_request(base_url, "GET", f"/secrets/{secret_id}/status")
-
+    secret_id = ctx.require_secret_id()
+    public_status = ctx.client.api_json("GET", f"/secrets/{secret_id}/status")
     if public_status.get("id") != secret_id:
-        log("ERROR: Public status endpoint returned mismatched secret id")
-        return False
+        raise RuntimeError("Public status endpoint returned mismatched secret id")
 
+    decrypt_status = ctx.require_decrypt_status()
     expected_public_status = (
         "unlocked" if decrypt_status.get("status") == "available" else decrypt_status.get("status")
     )
     if public_status.get("status") != expected_public_status:
-        log(
-            f"ERROR: Expected public status '{expected_public_status}', got '{public_status.get('status')}'"
+        raise RuntimeError(
+            f"Expected public status '{expected_public_status}', got '{public_status.get('status')}'"
         )
-        return False
 
-    # Optional: if unlock happens soon, wait briefly and verify available->unlocked mapping.
-    # (Keep bounded to avoid long smoke runtimes.)
-    try:
-        unlock_at_api = parse_utc_datetime(secret["unlock_at"])
-        seconds_until_unlock = (unlock_at_api - datetime.now(timezone.utc)).total_seconds()
-    except (KeyError, TypeError, ValueError):
-        seconds_until_unlock = 9999
 
+def step_optional_unlock_mapping(ctx: SmokeContext) -> None:
+    log("Waiting briefly for unlock to verify status mapping")
+    deadline = time.time() + UNLOCK_POLL_DEADLINE_SECONDS
+    while time.time() < deadline:
+        current = ctx.client.api_json(
+            "GET",
+            "/secrets/status",
+            headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
+        )
+        if current.get("exists") and current.get("status") == "available":
+            secret_id = ctx.require_secret_id()
+            public_current = ctx.client.api_json("GET", f"/secrets/{secret_id}/status")
+            if public_current.get("status") != "unlocked":
+                raise RuntimeError(
+                    f"Expected public status 'unlocked' after available, got '{public_current.get('status')}'"
+                )
+            return
+        time.sleep(UNLOCK_POLL_SLEEP_SECONDS)
+
+    log("Deadline reached without unlock; skipping status mapping verification")
+
+
+def skip_optional_unlock_mapping(ctx: SmokeContext) -> str | None:
+    if not ctx.unlock_at:
+        return "missing unlock_at"
+    seconds_until_unlock = (ctx.unlock_at - datetime.now(timezone.utc)).total_seconds()
     if 0 < seconds_until_unlock <= UNLOCK_SOON_MAX_SECONDS:
-        log("Waiting briefly for unlock to verify status mapping")
-        deadline = time.time() + UNLOCK_POLL_DEADLINE_SECONDS
-        while time.time() < deadline:
-            current = api_request(
-                base_url,
-                "GET",
-                "/secrets/status",
-                headers={"Authorization": f"Bearer {decrypt_token}"},
-            )
-            if current.get("exists") and current.get("status") == "available":
-                public_current = api_request(base_url, "GET", f"/secrets/{secret_id}/status")
-                if public_current.get("status") != "unlocked":
-                    log(
-                        f"ERROR: Expected public status 'unlocked' after available, got '{public_current.get('status')}'"
-                    )
-                    return False
-                break
-            time.sleep(UNLOCK_POLL_SLEEP_SECONDS)
-        else:
-            log("Deadline reached without unlock; skipping status mapping verification")
+        return None
+    return "unlock not soon"
 
-    # Note: we intentionally don't clean up created secrets; they expire naturally.
-    log("Full smoke test PASSED")
-    return True
+
+def skip_web_disabled(_: SmokeContext) -> str | None:
+    return "disabled via --skip-web"
 
 
 def main() -> int:
@@ -583,6 +755,18 @@ def main() -> int:
         help="Skip web homepage/assets checks (not recommended for staging/prod)",
     )
     parser.add_argument(
+        "--timeout",
+        type=float,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        help=f"HTTP timeout seconds (default: {DEFAULT_TIMEOUT_SECONDS:g})",
+    )
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=DEFAULT_RETRIES,
+        help=f"Retries for transient failures (default: {DEFAULT_RETRIES})",
+    )
+    parser.add_argument(
         "--max-health-attempts",
         type=int,
         default=30,
@@ -590,25 +774,37 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    base_url = args.base_url.rstrip("/")
-
-    # Always start with health check
-    log(f"Checking health: {base_url}/health")
-    if not wait_for_health(base_url, max_attempts=args.max_health_attempts):
-        log("ERROR: Health check failed")
-        return 1
-
-    if args.health_only:
-        log("Health-only mode: skipping full flow")
-        return 0
-
-    # Run full smoke test
     try:
-        if not args.skip_web:
-            check_web_serving(base_url)
-        if run_full_smoke_test(base_url):
-            return 0
-        return 1
+        base_url = args.base_url.rstrip("/")
+        client = HttpClient(base_url=base_url, timeout_seconds=args.timeout, retries=args.retries)
+        ctx = SmokeContext(client=client, max_health_attempts=args.max_health_attempts)
+
+        steps: list[Step] = [Step("health", step_health)]
+        if args.health_only:
+            log("Health-only mode: skipping full flow")
+        else:
+            steps.extend(
+                [
+                    Step(
+                        "web",
+                        step_web,
+                        skip_reason=skip_web_disabled if args.skip_web else None,
+                    ),
+                    Step("create secret", step_create_secret),
+                    Step("edit status", step_edit_status),
+                    Step("edit flow", step_edit_flow),
+                    Step("decrypt status", step_decrypt_status),
+                    Step("public status", step_public_status),
+                    Step(
+                        "optional unlock mapping",
+                        step_optional_unlock_mapping,
+                        skip_reason=skip_optional_unlock_mapping,
+                    ),
+                ]
+            )
+
+        ok = run_steps(ctx, steps)
+        return 0 if ok else 1
     except Exception as e:
         log(f"ERROR: {e}")
         return 1
