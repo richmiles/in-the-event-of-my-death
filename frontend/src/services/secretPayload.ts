@@ -20,6 +20,27 @@ export type SecretPayload = {
 const MAGIC = new Uint8Array([0x49, 0x45, 0x4f, 0x4d, 0x44])
 const VERSION = 1
 
+// Sanitize filename to prevent path traversal and other security issues
+function sanitizeFilename(name: string): string {
+  // Remove path components (both Unix and Windows style)
+  let sanitized = name.replace(/^.*[/\\]/, '')
+  // Remove null bytes and control characters (ASCII 0-31)
+  // eslint-disable-next-line no-control-regex
+  sanitized = sanitized.replace(/[\x00-\x1f]/g, '')
+  // Limit length to 255 characters (common filesystem limit)
+  if (sanitized.length > 255) {
+    const ext = sanitized.lastIndexOf('.')
+    if (ext > 0 && sanitized.length - ext <= 10) {
+      // Preserve extension if reasonable length
+      sanitized = sanitized.slice(0, 255 - (sanitized.length - ext)) + sanitized.slice(ext)
+    } else {
+      sanitized = sanitized.slice(0, 255)
+    }
+  }
+  // Fallback if empty after sanitization
+  return sanitized || 'attachment'
+}
+
 function writeU32BE(value: number): Uint8Array {
   const bytes = new Uint8Array(4)
   bytes[0] = (value >>> 24) & 0xff
@@ -144,7 +165,8 @@ export function decodeSecretPayload(payloadBytes: Uint8Array): SecretPayload {
 
   const attachments: SecretAttachment[] = []
   for (const meta of attachmentsMeta) {
-    const name = typeof meta.name === 'string' ? meta.name : 'attachment'
+    const rawName = typeof meta.name === 'string' ? meta.name : 'attachment'
+    const name = sanitizeFilename(rawName)
     const type = typeof meta.type === 'string' ? meta.type : 'application/octet-stream'
     const size = typeof meta.size === 'number' ? meta.size : 0
 

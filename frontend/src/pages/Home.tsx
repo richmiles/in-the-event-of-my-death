@@ -512,7 +512,7 @@ export default function Home() {
               <div className="attachment-chips" role="list" aria-label="Attachments">
                 {files.map((file, index) => (
                   <div
-                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    key={`${index}-${file.name}-${file.size}-${file.lastModified}`}
                     className="attachment-chip"
                     role="listitem"
                   >

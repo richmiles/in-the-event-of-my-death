@@ -290,8 +290,8 @@ export default function ViewSecret() {
             <div className="attachments">
               <h2>Attachments</h2>
               <ul>
-                {state.attachments.map((a) => (
-                  <li key={`${a.name}-${a.size}`}>
+                {state.attachments.map((a, index) => (
+                  <li key={`${index}-${a.name}-${a.size}`}>
                     <a href={a.url} download={a.name}>
                       {a.name}
                     </a>{' '}
