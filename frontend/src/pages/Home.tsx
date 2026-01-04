@@ -41,6 +41,7 @@ export default function Home() {
   // Dropdown open state
   const [unlockOpen, setUnlockOpen] = useState(false)
   const [expiryOpen, setExpiryOpen] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
   const unlockRef = useRef<HTMLDivElement>(null)
   const expiryRef = useRef<HTMLDivElement>(null)
   const attachmentInputRef = useRef<HTMLInputElement>(null)
@@ -283,6 +284,25 @@ export default function Home() {
     setFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // Get file type icon based on MIME type
+  const getFileIcon = (mimeType: string): string => {
+    if (mimeType.startsWith('image/')) return '🖼️'
+    if (mimeType.startsWith('audio/')) return '🎵'
+    if (mimeType.startsWith('video/')) return '🎬'
+    if (mimeType === 'application/pdf') return '📄'
+    if (mimeType.startsWith('text/')) return '📝'
+    if (
+      [
+        'application/zip',
+        'application/x-rar-compressed',
+        'application/gzip',
+        'application/x-tar',
+      ].includes(mimeType)
+    )
+      return '📦'
+    return '📎'
+  }
+
   if (step === 'processing') {
     return (
       <div className="home">
@@ -403,10 +423,15 @@ export default function Home() {
         <p className="hero-title">In The Event Of My Death</p>
         <form onSubmit={handleSubmit} className="inline-form">
           <div
-            className="message-input-container"
-            onDragOver={(e) => e.preventDefault()}
+            className={`message-input-container${dragActive ? ' drag-active' : ''}`}
+            onDragOver={(e) => {
+              e.preventDefault()
+              setDragActive(true)
+            }}
+            onDragLeave={() => setDragActive(false)}
             onDrop={(e) => {
               e.preventDefault()
+              setDragActive(false)
               addFiles(Array.from(e.dataTransfer.files))
             }}
           >
@@ -418,35 +443,23 @@ export default function Home() {
               rows={4}
               autoFocus
             />
-            <div className="composer-bar">
-              <input
-                ref={attachmentInputRef}
-                id="attachments"
-                type="file"
-                multiple
-                className="composer-file-input"
-                onChange={(e) => addFiles(e.target.files ? Array.from(e.target.files) : [])}
-              />
-              <button
-                type="button"
-                className="composer-attach-button"
-                onClick={openAttachmentPicker}
-                aria-label="Attach files"
-                title="Attach files"
-              >
-                <span aria-hidden="true">📎</span>
-              </button>
-              <div className="composer-hint">
-                Drop files here or click to attach
-                {files.length > 0 && (
-                  <>
-                    {' '}
-                    • {files.length} file{files.length === 1 ? '' : 's'} (
-                    {Math.round(files.reduce((sum, f) => sum + f.size, 0) / 1024)} KB)
-                  </>
-                )}
-              </div>
-            </div>
+            <input
+              ref={attachmentInputRef}
+              id="attachments"
+              type="file"
+              multiple
+              className="attach-file-input"
+              onChange={(e) => addFiles(e.target.files ? Array.from(e.target.files) : [])}
+            />
+            <button
+              type="button"
+              className="attach-button-overlay"
+              onClick={openAttachmentPicker}
+              aria-label="Attach files"
+              title="Attach files"
+            >
+              📎
+            </button>
 
             {files.length > 0 && (
               <div className="attachment-chips" aria-label="Attachments">
@@ -455,6 +468,9 @@ export default function Home() {
                     key={`${file.name}-${file.size}-${file.lastModified}`}
                     className="attachment-chip"
                   >
+                    <span className="attachment-chip-icon" aria-hidden="true">
+                      {getFileIcon(file.type)}
+                    </span>
                     <span className="attachment-chip-name" title={file.name}>
                       {file.name}
                     </span>

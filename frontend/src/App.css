@@ -366,80 +366,87 @@ textarea::placeholder {
   position: relative;
 }
 
-.composer-bar {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  background: var(--bg-primary);
+/* Hidden file input */
+.attach-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.composer-file-input {
-  display: none;
-}
-
-.composer-attach-button {
-  flex: 0 0 auto;
-  height: 40px;
-  width: 40px;
-  border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--bg-muted);
-  color: var(--text-primary);
+/* Claude-style overlay attach button */
+.attach-button-overlay {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-subtle);
   cursor: pointer;
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
   transition:
-    background 0.2s,
-    border-color 0.2s,
-    transform 0.1s;
+    color 0.15s,
+    background 0.15s;
+  z-index: 1;
+  font-size: 1rem;
 }
 
-.composer-attach-button:hover {
-  background: var(--bg-secondary);
+.attach-button-overlay:hover {
+  color: var(--text-primary);
+  background: var(--bg-muted);
+}
+
+.attach-button-overlay:active {
+  background: var(--border-subtle);
+}
+
+/* Drag-over visual feedback */
+.message-input-container.drag-active textarea {
   border-color: var(--accent-primary);
-  transform: translateY(-1px);
+  box-shadow: 0 0 0 3px rgba(100, 116, 139, 0.15);
 }
 
-.composer-attach-button:active {
-  transform: translateY(0);
-}
-
-.composer-hint {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  line-height: 1.3;
-}
-
+/* Attachment chips - tighter spacing */
 .attachment-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
+  gap: 6px;
+  margin-top: 8px;
 }
 
 .attachment-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 4px;
   border: 1px solid var(--border-subtle);
   background: var(--bg-muted);
-  padding: 0.35rem 0.5rem;
-  border-radius: 999px;
+  padding: 4px 8px;
+  border-radius: 16px;
   max-width: 100%;
+  font-size: 0.8125rem;
+}
+
+.attachment-chip-icon {
+  font-size: 0.875rem;
+  flex-shrink: 0;
 }
 
 .attachment-chip-name {
-  font-size: 0.875rem;
   color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 260px;
+  max-width: 180px;
 }
 
 .attachment-chip-remove {
@@ -447,9 +454,11 @@ textarea::placeholder {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1;
-  padding: 0 0.25rem;
+  padding: 0;
+  margin-left: 2px;
+  flex-shrink: 0;
 }
 
 .attachment-chip-remove:hover {
