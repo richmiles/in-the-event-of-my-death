@@ -38,7 +38,7 @@ def api_request(
     method: str,
     path: str,
     data: dict | None = None,
-    headers: dict | None = None,
+    headers: dict[str, str] | None = None,
 ) -> dict:
     """Make an API request and return JSON response."""
     url = f"{base_url}/api/v1{path}"
@@ -57,7 +57,11 @@ def api_request(
         raise RuntimeError(f"API error {e.code}: {error_body}") from e
 
 
-def http_get(url: str, timeout: float = 30.0, headers: dict | None = None) -> tuple[int, dict, bytes]:
+def http_get(
+    url: str,
+    timeout: float = 30.0,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], bytes]:
     req = Request(url, headers=headers or {}, method="GET")
     try:
         with urlopen(req, timeout=timeout) as response:
@@ -73,7 +77,7 @@ class _HTMLAssetParser(HTMLParser):
         self.asset_urls: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        attrs_dict = dict(attrs)
+        attrs_dict = {k: v for k, v in attrs if v is not None}
 
         if tag == "script":
             src = attrs_dict.get("src")
@@ -100,7 +104,10 @@ def check_web_serving(base_url: str) -> bool:
     if status != 200:
         raise RuntimeError(f"Homepage returned non-200: {status}")
 
-    content_type = (resp_headers.get("Content-Type") or "").lower()
+    content_type = next(
+        (v for k, v in resp_headers.items() if k.lower() == "content-type"),
+        "",
+    ).lower()
     if "text/html" not in content_type:
         raise RuntimeError(f"Homepage Content-Type not HTML: {content_type!r}")
 
@@ -140,6 +147,10 @@ def check_web_serving(base_url: str) -> bool:
         resolved_assets.append(absolute)
 
     unique_assets = list(dict.fromkeys(resolved_assets))
+    log(
+        "Assets discovered: "
+        f"raw={len(parser.asset_urls)} candidates={len(resolved_assets)} unique={len(unique_assets)}"
+    )
     if not unique_assets:
         raw_assets = list(dict.fromkeys(parser.asset_urls))[:10]
         raise RuntimeError(
