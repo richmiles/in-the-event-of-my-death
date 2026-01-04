@@ -33,7 +33,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
-from typing import Callable
+from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
@@ -78,7 +78,7 @@ def _decode_limited(value: bytes, max_chars: int = MAX_ERROR_BODY_CHARS) -> str:
 
 
 def _is_retryable_status(status_code: int) -> bool:
-    return status_code in {408, 425, 429, 500, 502, 503, 504}
+    return status_code in {408, 425, 429, 500, 502, 503, 504, 522, 524}
 
 
 @dataclass
@@ -130,10 +130,10 @@ class HttpClient:
         method: str,
         path: str,
         *,
-        data: dict | None = None,
+        data: dict[str, Any] | None = None,
         headers: dict[str, str] | None = None,
         timeout_seconds: float | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         url = f"{self.base_url}/api/v1{path}"
         req_headers: dict[str, str] = {"Content-Type": "application/json"}
         if headers:
@@ -427,7 +427,7 @@ class SmokeContext:
     secret_id: str | None = None
     unlock_at: datetime | None = None
     expires_at: datetime | None = None
-    decrypt_status: dict | None = None
+    decrypt_status: dict[str, Any] | None = None
 
     def require_edit_token(self) -> str:
         if not self.edit_token:
@@ -696,7 +696,7 @@ def step_public_status(ctx: SmokeContext) -> None:
 def step_optional_unlock_mapping(ctx: SmokeContext) -> None:
     seconds_until_unlock = (ctx.require_unlock_at() - datetime.now(timezone.utc)).total_seconds()
     if not (0 < seconds_until_unlock <= UNLOCK_SOON_MAX_SECONDS):
-        return
+        raise RuntimeError("Unlock mapping step invoked but unlock is not soon (runner bug)")
 
     log("Waiting briefly for unlock to verify status mapping")
     deadline = time.time() + UNLOCK_POLL_DEADLINE_SECONDS
@@ -770,12 +770,15 @@ def main() -> int:
         if args.health_only:
             log("Health-only mode: skipping full flow")
         else:
+            def skip_web(_: SmokeContext) -> str | None:
+                return "disabled via --skip-web"
+
             steps.extend(
                 [
                     Step(
                         "web",
                         step_web,
-                        skip_reason=(lambda _: "disabled via --skip-web") if args.skip_web else None,
+                        skip_reason=skip_web if args.skip_web else None,
                     ),
                     Step("create secret", step_create_secret),
                     Step("edit status", step_edit_status),
