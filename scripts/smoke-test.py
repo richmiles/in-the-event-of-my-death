@@ -58,6 +58,22 @@ def format_utc_datetime(dt: datetime) -> str:
     return dt_utc.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def assert_timestamps_match(
+    label: str,
+    expected_unlock_at: datetime,
+    expected_expires_at: datetime,
+    actual_unlock_at: datetime,
+    actual_expires_at: datetime,
+) -> bool:
+    if actual_unlock_at != expected_unlock_at or actual_expires_at != expected_expires_at:
+        log(
+            f"ERROR: {label}: expected=({expected_unlock_at.isoformat()}, {expected_expires_at.isoformat()}) "
+            f"actual=({actual_unlock_at.isoformat()}, {actual_expires_at.isoformat()})"
+        )
+        return False
+    return True
+
+
 def api_request(
     base_url: str,
     method: str,
@@ -363,12 +379,13 @@ def run_full_smoke_test(base_url: str) -> bool:
 
     status_unlock_at = parse_utc_datetime(status["unlock_at"])
     status_expires_at = parse_utc_datetime(status["expires_at"])
-    if status_unlock_at != created_unlock_at or status_expires_at != created_expires_at:
-        log(
-            "ERROR: Status timestamps do not match create response: "
-            f"create=({created_unlock_at.isoformat()}, {created_expires_at.isoformat()}) "
-            f"status=({status_unlock_at.isoformat()}, {status_expires_at.isoformat()})"
-        )
+    if not assert_timestamps_match(
+        "Status timestamps do not match create response",
+        created_unlock_at,
+        created_expires_at,
+        status_unlock_at,
+        status_expires_at,
+    ):
         return False
 
     log(f"Status verified: exists={status['exists']}, status={status['status']}")
@@ -399,12 +416,13 @@ def run_full_smoke_test(base_url: str) -> bool:
 
     edited_unlock_at = parse_utc_datetime(edited["unlock_at"])
     edited_expires_at = parse_utc_datetime(edited["expires_at"])
-    if edited_unlock_at != new_unlock_at or edited_expires_at != new_expires_at:
-        log(
-            "ERROR: Edit response timestamps do not match request: "
-            f"requested=({new_unlock_at.isoformat()}, {new_expires_at.isoformat()}) "
-            f"edited=({edited_unlock_at.isoformat()}, {edited_expires_at.isoformat()})"
-        )
+    if not assert_timestamps_match(
+        "Edit response timestamps do not match request",
+        new_unlock_at,
+        new_expires_at,
+        edited_unlock_at,
+        edited_expires_at,
+    ):
         return False
 
     if edited_unlock_at <= created_unlock_at or edited_expires_at <= created_expires_at:
@@ -429,12 +447,13 @@ def run_full_smoke_test(base_url: str) -> bool:
 
     status2_unlock_at = parse_utc_datetime(status2["unlock_at"])
     status2_expires_at = parse_utc_datetime(status2["expires_at"])
-    if status2_unlock_at != edited_unlock_at or status2_expires_at != edited_expires_at:
-        log(
-            "ERROR: Status timestamps do not reflect edit: "
-            f"expected=({edited_unlock_at.isoformat()}, {edited_expires_at.isoformat()}) "
-            f"status=({status2_unlock_at.isoformat()}, {status2_expires_at.isoformat()})"
-        )
+    if not assert_timestamps_match(
+        "Status timestamps do not reflect edit",
+        edited_unlock_at,
+        edited_expires_at,
+        status2_unlock_at,
+        status2_expires_at,
+    ):
         return False
 
     log("Full smoke test PASSED")
