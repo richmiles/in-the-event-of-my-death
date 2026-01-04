@@ -251,6 +251,8 @@ make test    # Run backend tests
 make check   # Run all checks (lint, format, typecheck, test)
 ```
 
+Staging/production smoke tests are documented in `docs/smoke-tests.md`.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for testing requirements when submitting PRs.
 
 ## License
