@@ -86,7 +86,7 @@ def compute_unlock_at_for_environment(desired_unlock_at: datetime, api_error: Ap
     if api_error.status_code not in (400, 422):
         return None
 
-    m = re.search(r"Unlock date must be at least (\\d+) minutes in the future", api_error.body)
+    m = re.search(r"Unlock date must be at least (\d+) minutes in the future", api_error.body)
     if not m:
         return None
 
@@ -381,6 +381,7 @@ def run_full_smoke_test(base_url: str) -> bool:
         log("ERROR: Secret not found via edit token")
         return False
 
+    # With a short unlock (when allowed), the secret can flip to available quickly.
     if status.get("status") not in ("pending", "available"):
         log(f"ERROR: Unexpected edit status '{status.get('status')}'")
         return False
@@ -426,7 +427,7 @@ def run_full_smoke_test(base_url: str) -> bool:
     try:
         unlock_at_api = parse_utc_datetime(secret["unlock_at"])
         seconds_until_unlock = (unlock_at_api - datetime.now(timezone.utc)).total_seconds()
-    except Exception:
+    except (KeyError, TypeError, ValueError):
         seconds_until_unlock = 9999
 
     if 0 < seconds_until_unlock <= 90:
@@ -449,6 +450,7 @@ def run_full_smoke_test(base_url: str) -> bool:
                 break
             time.sleep(2)
 
+    # Note: we intentionally don't clean up created secrets; they expire naturally.
     log("Full smoke test PASSED")
     return True
 
