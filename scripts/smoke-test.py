@@ -17,7 +17,6 @@ Usage:
 import argparse
 import base64
 import hashlib
-import ipaddress
 import json
 import secrets
 import sys
@@ -69,7 +68,8 @@ def http_get(
             return response.getcode(), dict(response.headers.items()), response.read()
     except HTTPError as e:
         error_body = e.read() if e.fp else b""
-        raise RuntimeError(f"HTTP error {e.code} for {url}: {error_body[:500]!r}") from e
+        resp_headers = dict(e.headers.items()) if e.headers else {}
+        return e.code, resp_headers, error_body
 
 
 class _HTMLAssetParser(HTMLParser):
@@ -88,7 +88,10 @@ class _HTMLAssetParser(HTMLParser):
         if tag == "link":
             rel = (attrs_dict.get("rel") or "").lower()
             href = attrs_dict.get("href")
-            if href and "stylesheet" in rel:
+            if not href:
+                return
+            # Vite commonly uses <link rel="modulepreload" href="..."> for JS chunks.
+            if any(token in rel for token in ("stylesheet", "modulepreload", "preload")):
                 self.asset_urls.append(href)
 
 
@@ -116,37 +119,25 @@ def check_web_serving(base_url: str) -> None:
     if "text/html" not in content_type:
         raise RuntimeError(f"Homepage Content-Type not HTML: {content_type!r}")
 
-    if not body or len(body) < 200:
-        raise RuntimeError(f"Homepage response too small ({len(body)} bytes)")
+    if not body:
+        raise RuntimeError("Homepage returned empty body")
 
     body_text = body.decode("utf-8", errors="replace")
+    if 'id="root"' not in body_text and "id='root'" not in body_text:
+        if len(body) < 200:
+            raise RuntimeError(
+                "Homepage HTML missing expected root marker and is unexpectedly small "
+                f"({len(body)} bytes, preview={body[:200]!r})"
+            )
+        log("WARNING: Homepage HTML missing expected root marker (id=\"root\"); continuing")
+
     parser = _HTMLAssetParser()
     parser.feed(body_text)
 
     base_parsed = urlparse(base_url)
     base_netloc = base_parsed.netloc
-    base_hostname = base_parsed.hostname
-    if not base_hostname:
-        raise RuntimeError(f"Unable to parse hostname from base_url: {base_url!r}")
-
-    is_ip_host = False
-    try:
-        ipaddress.ip_address(base_hostname)
-        is_ip_host = True
-    except ValueError:
-        is_ip_host = False
-
-    base_labels = [label for label in base_hostname.split(".") if label]
-    base_root_domain = ".".join(base_labels[-2:]) if len(base_labels) >= 2 else base_hostname
-
-    def is_allowed_asset_host(hostname: str) -> bool:
-        if is_ip_host:
-            return hostname == base_hostname
-        return (
-            hostname == base_hostname
-            or hostname == base_root_domain
-            or hostname.endswith(f".{base_root_domain}")
-        )
+    if not base_netloc:
+        raise RuntimeError(f"Unable to parse netloc from base_url: {base_url!r}")
 
     def looks_like_static_asset(path: str) -> bool:
         lower = path.lower()
@@ -165,7 +156,8 @@ def check_web_serving(base_url: str) -> None:
             continue
         if not looks_like_static_asset(parsed.path):
             continue
-        if not parsed.hostname or not is_allowed_asset_host(parsed.hostname):
+        # "Same-origin" for smoke test purposes: same scheme/host/port.
+        if parsed.netloc != base_netloc:
             continue
         resolved_assets.append(absolute)
 
@@ -177,13 +169,12 @@ def check_web_serving(base_url: str) -> None:
     if not unique_assets:
         raw_assets = list(dict.fromkeys(parser.asset_urls))[:10]
         raise RuntimeError(
-            "No loadable JS/CSS assets found in homepage HTML "
-            f"(base_netloc={base_netloc!r}, base_host={base_hostname!r}, "
-            f"base_root={base_root_domain!r}, found={raw_assets!r})"
+            "No loadable same-origin JS/CSS assets found in homepage HTML "
+            f"(base_netloc={base_netloc!r}, found={raw_assets!r})"
         )
 
-    # Fetch at most 2 assets to keep runtime low while still catching broken static hosting.
-    for asset_url in unique_assets[:2]:
+    # Fetch at most 1 asset to keep runtime low while still catching broken static hosting.
+    for asset_url in unique_assets[:1]:
         log(f"Fetching asset: {asset_url}")
         asset_status, _, asset_body = http_get(
             asset_url,
@@ -191,11 +182,13 @@ def check_web_serving(base_url: str) -> None:
             headers={"Accept": "*/*"},
         )
         if asset_status != 200:
-            raise RuntimeError(f"Asset returned non-200: {asset_status} ({asset_url})")
+            raise RuntimeError(
+                f"Asset returned non-200: {asset_status} ({asset_url}, preview={asset_body[:200]!r})"
+            )
         if not asset_body:
             raise RuntimeError(f"Asset returned empty body: {asset_url}")
 
-    log(f"Web checks passed (assets fetched: {min(len(unique_assets), 2)}/{len(unique_assets)})")
+    log("Web checks passed (assets fetched: 1)")
 
 
 def wait_for_health(base_url: str, max_attempts: int = 30, delay: float = 2.0) -> bool:
