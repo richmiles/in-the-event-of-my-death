@@ -289,29 +289,28 @@ export default function Home() {
       return
     }
 
-    setFiles((existing) => {
-      const next = [...existing]
-      for (const file of incoming) {
-        const key = `${file.name}:${file.size}:${file.lastModified}`
-        const already = next.some((f) => `${f.name}:${f.size}:${f.lastModified}` === key)
-        if (!already) next.push(file)
-      }
+    // Compute merged list (deduplicated) to validate before updating state
+    const merged = [...files]
+    for (const file of incoming) {
+      const key = `${file.name}:${file.size}:${file.lastModified}`
+      const already = merged.some((f) => `${f.name}:${f.size}:${f.lastModified}` === key)
+      if (!already) merged.push(file)
+    }
 
-      // Validate total count
-      if (next.length > MAX_FILES) {
-        setError(`Maximum ${MAX_FILES} files allowed`)
-        return existing
-      }
+    // Validate total count
+    if (merged.length > MAX_FILES) {
+      setError(`Maximum ${MAX_FILES} files allowed`)
+      return
+    }
 
-      // Validate total size
-      const totalSize = next.reduce((sum, f) => sum + f.size, 0)
-      if (totalSize > MAX_TOTAL_SIZE_BYTES) {
-        setError(`Total file size exceeds maximum of 100MB`)
-        return existing
-      }
+    // Validate total size
+    const totalSize = merged.reduce((sum, f) => sum + f.size, 0)
+    if (totalSize > MAX_TOTAL_SIZE_BYTES) {
+      setError(`Total file size exceeds maximum of 100MB`)
+      return
+    }
 
-      return next
-    })
+    setFiles(merged)
   }
 
   const removeFileAt = (index: number) => {
@@ -485,6 +484,7 @@ export default function Home() {
               placeholder="Enter your secret message..."
               rows={4}
               autoFocus
+              aria-required={files.length === 0}
             />
             <input
               ref={attachmentInputRef}
@@ -505,11 +505,12 @@ export default function Home() {
             </button>
 
             {files.length > 0 && (
-              <div className="attachment-chips" aria-label="Attachments">
+              <div className="attachment-chips" role="list" aria-label="Attachments">
                 {files.map((file, index) => (
                   <div
                     key={`${file.name}-${file.size}-${file.lastModified}`}
                     className="attachment-chip"
+                    role="listitem"
                   >
                     <span className="attachment-chip-icon" aria-hidden="true">
                       {getFileIcon(file.type)}
