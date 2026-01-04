@@ -19,14 +19,18 @@ This repo is a small monorepo:
      - **#11** - IEOMD - UX Enhancements (link ordering, defaults, sharing)
      - **#12** - IEOMD - Infrastructure (ongoing DevOps, monitoring, tooling)
 
-3. **Create a worktree for the issue**
+3. **Create a dedicated branch + worktree for the issue**
+   - This is required for ALL work (including small docs changes), not just parallel work
+   - All work must be done inside the issue worktree (not the main checkout)
    ```bash
-   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description>
+   git fetch origin
+   git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description> origin/main
    cd ../ieomd-<issue-number>
    ```
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
    - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
-   - If already in a worktree for the issue, proceed without creating a new one
+   - If the branch already exists, create a worktree from it: `git worktree add ../ieomd-<issue-number> <branch-name>`
+   - If already in the correct issue worktree, proceed without creating a new one
 
 **If the user requests work without an issue number, ask them to confirm issue creation before proceeding.**
 
