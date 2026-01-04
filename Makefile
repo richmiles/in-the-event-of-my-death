@@ -1,4 +1,5 @@
 .PHONY: install backend backend-server frontend dev test migrate lint format format-check typecheck check hooks help
+.PHONY: minio minio-down
 
 # Server configuration (override with environment variables for parallel worktrees)
 BACKEND_HOST ?= 127.0.0.1
@@ -33,12 +34,18 @@ backend: migrate backend-server
 frontend:
 	cd frontend && npm run dev -- --port $(FRONTEND_PORT)
 
-dev: migrate
+dev: minio migrate
 	@echo "Starting backend and frontend..."
 	@echo "Backend: http://localhost:$(BACKEND_PORT)"
 	@echo "Frontend: http://localhost:$(FRONTEND_PORT)"
 	@echo ""
 	@$(MAKE) -j2 backend-server frontend
+
+minio:
+	docker compose up -d minio minio-init
+
+minio-down:
+	docker compose down
 
 test:
 	cd backend && poetry run pytest tests/ -v

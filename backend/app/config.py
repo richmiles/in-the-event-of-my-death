@@ -68,5 +68,13 @@ class Settings(BaseSettings):
     rate_limit_token_validate: str = "60/minute"
     internal_api_key: str | None = None
 
+    # Object Storage (S3-compatible; e.g. DigitalOcean Spaces, MinIO)
+    object_storage_enabled: bool = False
+    object_storage_endpoint: str | None = None
+    object_storage_bucket: str | None = None
+    object_storage_access_key: str | None = None
+    object_storage_secret_key: str | None = None
+    object_storage_region: str = "us-east-1"
+
 
 settings = Settings()

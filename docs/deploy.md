@@ -78,3 +78,17 @@ Production deploy performs:
 
 Rollback plan:
 - Restore the DB backup file and redeploy the previous image tag.
+
+## Object storage (DigitalOcean Spaces)
+
+For encrypted file attachments, configure an S3-compatible bucket (DigitalOcean Spaces).
+
+1. Create a Spaces bucket (e.g. `ieomd-prod-attachments`) in your region (e.g. `nyc3`).
+2. Create a Spaces access key + secret (write access to that bucket).
+3. Add to `/opt/ieomd/.env`:
+   - `OBJECT_STORAGE_ENABLED=true`
+   - `OBJECT_STORAGE_ENDPOINT=https://<region>.digitaloceanspaces.com` (e.g. `https://nyc3.digitaloceanspaces.com`)
+   - `OBJECT_STORAGE_BUCKET=<bucket-name>`
+   - `OBJECT_STORAGE_ACCESS_KEY=<spaces-access-key>`
+   - `OBJECT_STORAGE_SECRET_KEY=<spaces-secret-key>`
+   - `OBJECT_STORAGE_REGION=<region>` (e.g. `nyc3`)
