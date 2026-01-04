@@ -55,8 +55,11 @@ UNLOCK_POLL_SLEEP_SECONDS = 2
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_RETRIES = 2
 DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
+# Used when surfacing API error bodies (text) for debugging without log spam.
 MAX_ERROR_BODY_CHARS = 10_000
+# Used when surfacing raw HTTP bodies (bytes) as a preview in error messages.
 BODY_PREVIEW_BYTES = 200
+MAX_BACKOFF_SECONDS = 4.0
 
 
 def log(msg: str) -> None:
@@ -78,7 +81,7 @@ def _decode_limited(value: bytes, max_chars: int = MAX_ERROR_BODY_CHARS) -> str:
 
 
 def _is_retryable_status(status_code: int) -> bool:
-    return status_code in {408, 425, 429, 500, 502, 503, 504, 522, 524}
+    return status_code in {408, 425, 429, 502, 503, 504, 522, 524}
 
 
 @dataclass
@@ -173,7 +176,7 @@ class HttpClient:
     def _sleep_backoff(self, attempt: int) -> None:
         base = self.retry_backoff_seconds * (2 ** (attempt - 1))
         jitter = random.random() * self.retry_backoff_seconds
-        time.sleep(min(4.0, base + jitter))
+        time.sleep(min(MAX_BACKOFF_SECONDS, base + jitter))
 
 
 def parse_utc_datetime(value: str) -> datetime:
@@ -315,6 +318,7 @@ def check_web_serving(client: HttpClient) -> None:
             continue
         if not looks_like_static_asset(parsed.path):
             continue
+        # Same-origin for smoke-test purposes: same scheme/host/port.
         if parsed.netloc != base_netloc:
             continue
         resolved_assets.append(absolute)
@@ -453,6 +457,11 @@ class SmokeContext:
         if not self.expires_at:
             raise RuntimeError("Missing expires_at (step ordering bug)")
         return self.expires_at
+
+    def require_decrypt_status(self) -> dict[str, Any]:
+        if self.decrypt_status is None:
+            raise RuntimeError("Missing decrypt_status (step ordering bug)")
+        return self.decrypt_status
 
 
 @dataclass(frozen=True)
@@ -683,7 +692,7 @@ def step_public_status(ctx: SmokeContext) -> None:
     if public_status.get("id") != secret_id:
         raise RuntimeError("Public status endpoint returned mismatched secret id")
 
-    decrypt_status = ctx.decrypt_status or {}
+    decrypt_status = ctx.require_decrypt_status()
     expected_public_status = (
         "unlocked" if decrypt_status.get("status") == "available" else decrypt_status.get("status")
     )
@@ -694,10 +703,6 @@ def step_public_status(ctx: SmokeContext) -> None:
 
 
 def step_optional_unlock_mapping(ctx: SmokeContext) -> None:
-    seconds_until_unlock = (ctx.require_unlock_at() - datetime.now(timezone.utc)).total_seconds()
-    if not (0 < seconds_until_unlock <= UNLOCK_SOON_MAX_SECONDS):
-        raise RuntimeError("Unlock mapping step invoked but unlock is not soon (runner bug)")
-
     log("Waiting briefly for unlock to verify status mapping")
     deadline = time.time() + UNLOCK_POLL_DEADLINE_SECONDS
     while time.time() < deadline:
@@ -726,6 +731,10 @@ def skip_optional_unlock_mapping(ctx: SmokeContext) -> str | None:
     if 0 < seconds_until_unlock <= UNLOCK_SOON_MAX_SECONDS:
         return None
     return "unlock not soon"
+
+
+def skip_web_disabled(_: SmokeContext) -> str | None:
+    return "disabled via --skip-web"
 
 
 def main() -> int:
@@ -770,15 +779,12 @@ def main() -> int:
         if args.health_only:
             log("Health-only mode: skipping full flow")
         else:
-            def skip_web(_: SmokeContext) -> str | None:
-                return "disabled via --skip-web"
-
             steps.extend(
                 [
                     Step(
                         "web",
                         step_web,
-                        skip_reason=skip_web if args.skip_web else None,
+                        skip_reason=skip_web_disabled if args.skip_web else None,
                     ),
                     Step("create secret", step_create_secret),
                     Step("edit status", step_edit_status),
