@@ -76,6 +76,13 @@ describe('vault service', () => {
     expect(entries[0].status).toBe('unlocked')
   })
 
+  it('throws when updating a non-existent entry', async () => {
+    await initVault()
+    await expect(updateEntry('nonexistent', { label: 'foo' })).rejects.toThrow(
+      'Vault entry not found',
+    )
+  })
+
   it('deletes an entry by secretId', async () => {
     await initVault()
 

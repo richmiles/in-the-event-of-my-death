@@ -2,6 +2,15 @@ import type { VaultEntry } from '../types'
 
 import { bytesToBase64 } from './crypto'
 
+/**
+ * Client-side vault persistence using IndexedDB.
+ *
+ * Security note (Phase 1):
+ * - Vault entries are stored unencrypted in IndexedDB and may include sensitive metadata like
+ *   `editToken` and user-entered labels/hints.
+ * - `vaultKey` is generated and persisted for future use, but it does not provide protection until
+ *   Phase 2 encrypts entries using a key hierarchy that is not stored alongside the database.
+ */
 const DB_NAME = 'ieomd-vault'
 const DB_VERSION = 1
 
