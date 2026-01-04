@@ -89,6 +89,24 @@ a {
   color: var(--accent-hover);
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.helper-text {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
 .app {
   min-height: 100vh;
   display: flex;
@@ -996,6 +1014,20 @@ input[type='email']:focus {
   word-wrap: break-word;
   font-family: inherit;
   color: var(--text-primary);
+}
+
+.attachments h2 {
+  margin: 1.25rem 0 0.5rem;
+  font-size: 1.125rem;
+}
+
+.attachments ul {
+  margin: 0;
+  padding-left: 1.25rem;
+}
+
+.attachments li {
+  margin: 0.25rem 0;
 }
 
 /* Edit secret */
