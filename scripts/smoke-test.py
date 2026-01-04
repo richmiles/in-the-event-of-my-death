@@ -101,13 +101,17 @@ def check_web_serving(base_url: str) -> None:
     homepage_url = f"{base_url}/"
     log(f"Checking web homepage: {homepage_url}")
     status, resp_headers, body = http_get(homepage_url, timeout=20.0)
-    if status != 200:
-        raise RuntimeError(f"Homepage returned non-200: {status}")
-
-    content_type = next(
+    content_type_header = next(
         (v for k, v in resp_headers.items() if k.lower() == "content-type"),
         "",
-    ).lower()
+    )
+    if status != 200:
+        raise RuntimeError(
+            f"Homepage returned non-200: {status} "
+            f"(content_type={content_type_header!r}, body_preview={body[:200]!r})"
+        )
+
+    content_type = content_type_header.lower()
     if "text/html" not in content_type:
         raise RuntimeError(f"Homepage Content-Type not HTML: {content_type!r}")
 
