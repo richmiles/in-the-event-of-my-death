@@ -26,7 +26,9 @@ This repo is a small monorepo:
    git fetch origin
    git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description> origin/main
    cd ../ieomd-<issue-number>
+   make install
    ```
+   - Run `make install` once per worktree (each worktree has its own `node_modules` and Poetry virtualenv)
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
    - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
    - If the branch already exists, create a worktree from it: `git worktree add ../ieomd-<issue-number> <branch-name>`
