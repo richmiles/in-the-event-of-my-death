@@ -8,6 +8,7 @@ Tests the full secret creation flow:
 3. Solve PoW
 4. Create secret
 5. Check secret status via edit token
+6. Edit secret dates via edit token and re-check status
 
 Usage:
     ./scripts/smoke-test.py https://staging.example.com
@@ -31,6 +32,30 @@ from urllib.request import Request, urlopen
 def log(msg: str) -> None:
     """Print timestamped log message."""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def parse_utc_datetime(value: str) -> datetime:
+    """
+    Parse an API UTC datetime string.
+
+    Backend responses are expected to be ISO-like with a trailing "Z"
+    (e.g., "2025-01-01T12:34:56Z").
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Invalid datetime value: {value!r}")
+
+    if value.endswith("Z"):
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def format_utc_datetime(dt: datetime) -> str:
+    dt_utc = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt_utc.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def api_request(
@@ -289,10 +314,10 @@ def run_full_smoke_test(base_url: str) -> bool:
     counter = solve_pow(challenge["nonce"], payload_hash, challenge["difficulty"])
 
     # Step 4: Create secret
-    # Use minimum allowed times (5 min unlock, 60 min gap, so 65 min expiry)
+    # Keep unlock safely in the future to avoid flakiness during slow runs.
     now = datetime.now(timezone.utc)
-    unlock_at = now + timedelta(minutes=6)  # Slightly over minimum
-    expires_at = unlock_at + timedelta(minutes=65)  # Slightly over minimum gap
+    unlock_at = now + timedelta(minutes=10)
+    expires_at = unlock_at + timedelta(minutes=65)
 
     log("Creating secret")
     secret = api_request(
@@ -303,8 +328,8 @@ def run_full_smoke_test(base_url: str) -> bool:
             "ciphertext": ciphertext_b64,
             "iv": iv_b64,
             "auth_tag": auth_tag_b64,
-            "unlock_at": unlock_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "expires_at": expires_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "unlock_at": format_utc_datetime(unlock_at),
+            "expires_at": format_utc_datetime(expires_at),
             "edit_token": edit_token,
             "decrypt_token": decrypt_token,
             "pow_proof": {
@@ -315,6 +340,8 @@ def run_full_smoke_test(base_url: str) -> bool:
             },
         },
     )
+    created_unlock_at = parse_utc_datetime(secret["unlock_at"])
+    created_expires_at = parse_utc_datetime(secret["expires_at"])
     log(f"Secret created: id={secret['secret_id']}, unlock_at={secret['unlock_at']}")
 
     # Step 5: Check status via edit token
@@ -334,7 +361,82 @@ def run_full_smoke_test(base_url: str) -> bool:
         log(f"ERROR: Expected status 'pending', got '{status.get('status')}'")
         return False
 
+    status_unlock_at = parse_utc_datetime(status["unlock_at"])
+    status_expires_at = parse_utc_datetime(status["expires_at"])
+    if status_unlock_at != created_unlock_at or status_expires_at != created_expires_at:
+        log(
+            "ERROR: Status timestamps do not match create response: "
+            f"create=({created_unlock_at.isoformat()}, {created_expires_at.isoformat()}) "
+            f"status=({status_unlock_at.isoformat()}, {status_expires_at.isoformat()})"
+        )
+        return False
+
     log(f"Status verified: exists={status['exists']}, status={status['status']}")
+
+    # Step 6: Edit secret dates and re-check status remains pending
+    log("Editing secret dates via edit token")
+    new_unlock_at = (created_unlock_at + timedelta(minutes=5)).replace(microsecond=0)
+    new_expires_at = (created_expires_at + timedelta(minutes=5)).replace(microsecond=0)
+
+    if new_unlock_at >= new_expires_at:
+        log("ERROR: Computed invalid edited timestamps (unlock >= expiry)")
+        return False
+
+    if (new_expires_at - new_unlock_at) < timedelta(minutes=15):
+        log("ERROR: Computed invalid edited timestamps (gap < 15 minutes)")
+        return False
+
+    edited = api_request(
+        base_url,
+        "PUT",
+        "/secrets/edit",
+        headers={"Authorization": f"Bearer {edit_token}"},
+        data={
+            "unlock_at": format_utc_datetime(new_unlock_at),
+            "expires_at": format_utc_datetime(new_expires_at),
+        },
+    )
+
+    edited_unlock_at = parse_utc_datetime(edited["unlock_at"])
+    edited_expires_at = parse_utc_datetime(edited["expires_at"])
+    if edited_unlock_at != new_unlock_at or edited_expires_at != new_expires_at:
+        log(
+            "ERROR: Edit response timestamps do not match request: "
+            f"requested=({new_unlock_at.isoformat()}, {new_expires_at.isoformat()}) "
+            f"edited=({edited_unlock_at.isoformat()}, {edited_expires_at.isoformat()})"
+        )
+        return False
+
+    if edited_unlock_at <= created_unlock_at or edited_expires_at <= created_expires_at:
+        log("ERROR: Edit did not postpone timestamps as expected")
+        return False
+
+    log("Re-checking secret edit status after edit")
+    status2 = api_request(
+        base_url,
+        "GET",
+        "/secrets/edit/status",
+        headers={"Authorization": f"Bearer {edit_token}"},
+    )
+
+    if not status2.get("exists"):
+        log("ERROR: Secret not found via edit token after edit")
+        return False
+
+    if status2.get("status") != "pending":
+        log(f"ERROR: Expected status 'pending' after edit, got '{status2.get('status')}'")
+        return False
+
+    status2_unlock_at = parse_utc_datetime(status2["unlock_at"])
+    status2_expires_at = parse_utc_datetime(status2["expires_at"])
+    if status2_unlock_at != edited_unlock_at or status2_expires_at != edited_expires_at:
+        log(
+            "ERROR: Status timestamps do not reflect edit: "
+            f"expected=({edited_unlock_at.isoformat()}, {edited_expires_at.isoformat()}) "
+            f"status=({status2_unlock_at.isoformat()}, {status2_expires_at.isoformat()})"
+        )
+        return False
+
     log("Full smoke test PASSED")
     return True
 
