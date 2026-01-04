@@ -16,6 +16,11 @@ type Step = 'input' | 'processing' | 'done'
 
 const MAX_POW_CIPHERTEXT_BYTES = 1_000_000
 
+// File attachment limits
+const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024 // 50MB per file
+const MAX_TOTAL_SIZE_BYTES = 100 * 1024 * 1024 // 100MB total
+const MAX_FILES = 10
+
 export default function Home() {
   const [step, setStep] = useState<Step>('input')
   const [message, setMessage] = useState('')
@@ -139,11 +144,17 @@ export default function Home() {
       // Step 1: Read attachments and build payload
       setProgress(files.length > 0 ? 'Preparing attachments...' : 'Preparing your secret...')
       const attachments = await Promise.all(
-        files.map(async (file) => ({
-          name: file.name,
-          type: file.type || 'application/octet-stream',
-          bytes: new Uint8Array(await file.arrayBuffer()),
-        })),
+        files.map(async (file) => {
+          try {
+            return {
+              name: file.name,
+              type: file.type || 'application/octet-stream',
+              bytes: new Uint8Array(await file.arrayBuffer()),
+            }
+          } catch {
+            throw new Error(`Failed to read file: ${file.name}`)
+          }
+        }),
       )
 
       const payloadBytes = encodeSecretPayloadV1({
@@ -269,6 +280,15 @@ export default function Home() {
 
   const addFiles = (incoming: File[]) => {
     if (incoming.length === 0) return
+    setError(null)
+
+    // Validate individual file sizes
+    const oversizedFile = incoming.find((f) => f.size > MAX_FILE_SIZE_BYTES)
+    if (oversizedFile) {
+      setError(`File "${oversizedFile.name}" exceeds maximum size of 50MB`)
+      return
+    }
+
     setFiles((existing) => {
       const next = [...existing]
       for (const file of incoming) {
@@ -276,12 +296,35 @@ export default function Home() {
         const already = next.some((f) => `${f.name}:${f.size}:${f.lastModified}` === key)
         if (!already) next.push(file)
       }
+
+      // Validate total count
+      if (next.length > MAX_FILES) {
+        setError(`Maximum ${MAX_FILES} files allowed`)
+        return existing
+      }
+
+      // Validate total size
+      const totalSize = next.reduce((sum, f) => sum + f.size, 0)
+      if (totalSize > MAX_TOTAL_SIZE_BYTES) {
+        setError(`Total file size exceeds maximum of 100MB`)
+        return existing
+      }
+
       return next
     })
   }
 
   const removeFileAt = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // Format bytes as human-readable size
+  const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
   }
 
   // Get file type icon based on MIME type
@@ -485,6 +528,10 @@ export default function Home() {
                     </button>
                   </div>
                 ))}
+                <span className="attachment-summary">
+                  {files.length} {files.length === 1 ? 'file' : 'files'} (
+                  {formatBytes(files.reduce((sum, f) => sum + f.size, 0))})
+                </span>
               </div>
             )}
           </div>

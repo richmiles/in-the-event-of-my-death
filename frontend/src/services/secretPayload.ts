@@ -15,7 +15,9 @@ export type SecretPayload = {
   attachments: SecretAttachment[]
 }
 
-const MAGIC = new Uint8Array([0x49, 0x45, 0x4f, 0x4d, 0x44]) // "IEOMD"
+// Magic bytes identify v1+ binary payloads vs legacy plaintext.
+// ASCII "IEOMD" = [0x49, 0x45, 0x4f, 0x4d, 0x44]
+const MAGIC = new Uint8Array([0x49, 0x45, 0x4f, 0x4d, 0x44])
 const VERSION = 1
 
 function writeU32BE(value: number): Uint8Array {
@@ -28,6 +30,8 @@ function writeU32BE(value: number): Uint8Array {
 }
 
 function readU32BE(bytes: Uint8Array, offset: number): number {
+  // The >>> 0 converts the result to an unsigned 32-bit integer.
+  // Without it, values >= 0x80000000 would be negative due to JS signed int32.
   return (
     ((bytes[offset] << 24) |
       (bytes[offset + 1] << 16) |

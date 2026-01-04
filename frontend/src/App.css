@@ -465,6 +465,13 @@ textarea::placeholder {
   color: var(--text-primary);
 }
 
+.attachment-summary {
+  font-size: 0.75rem;
+  color: var(--text-subtle);
+  align-self: center;
+  margin-left: 4px;
+}
+
 .linkish-button {
   border: none;
   background: transparent;
