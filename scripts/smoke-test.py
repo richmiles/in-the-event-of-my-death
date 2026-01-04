@@ -15,6 +15,8 @@ Flow (default):
 5. Edit flow (PUT /secrets/edit + re-check status)
 6. Decrypt-token status check
 7. Public status-by-id check
+8. Retrieve pending check (optional; only when unlock is soon)
+9. Unlock + retrieve one-time delete (optional; only when unlock is soon)
 
 Usage:
     ./scripts/smoke-test.py https://staging.example.com
@@ -48,12 +50,17 @@ class ApiError(RuntimeError):
         self.body = body
 
 
-DEFAULT_UNLOCK_MINUTES = 10
+# Keep unlock close enough to exercise unlock/retrieve lifecycle without making
+# the smoke test slow. Environments may enforce a higher min unlock; we detect
+# and adapt (see compute_unlock_at_for_environment()).
+DEFAULT_UNLOCK_SECONDS = 90
 EXPIRY_GAP_MINUTES = 65
 MIN_UNLOCK_BUFFER_SECONDS = 5
-UNLOCK_SOON_MAX_SECONDS = 90
+# Threshold used to decide whether to wait/poll for unlock-related behaviors.
+UNLOCK_SOON_MAX_SECONDS = 120
 UNLOCK_POLL_DEADLINE_SECONDS = 120
 UNLOCK_POLL_SLEEP_SECONDS = 2
+EDIT_POSTPONE_SECONDS = 15
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_RETRIES = 2
 DEFAULT_RETRY_BACKOFF_SECONDS = 0.5
@@ -550,7 +557,7 @@ def step_create_secret(ctx: SmokeContext) -> None:
     counter = solve_pow(challenge["nonce"], payload_hash, challenge["difficulty"])
 
     now = datetime.now(timezone.utc)
-    unlock_at = (now + timedelta(minutes=DEFAULT_UNLOCK_MINUTES)).replace(microsecond=0)
+    unlock_at = (now + timedelta(seconds=DEFAULT_UNLOCK_SECONDS)).replace(microsecond=0)
     expires_at = (unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)).replace(microsecond=0)
 
     log("Creating secret")
@@ -620,8 +627,8 @@ def step_edit_flow(ctx: SmokeContext) -> None:
     created_unlock_at = ctx.require_unlock_at()
     created_expires_at = ctx.require_expires_at()
 
-    new_unlock_at = (created_unlock_at + timedelta(minutes=5)).replace(microsecond=0)
-    new_expires_at = (created_expires_at + timedelta(minutes=5)).replace(microsecond=0)
+    new_unlock_at = (created_unlock_at + timedelta(seconds=EDIT_POSTPONE_SECONDS)).replace(microsecond=0)
+    new_expires_at = (created_expires_at + timedelta(seconds=EDIT_POSTPONE_SECONDS)).replace(microsecond=0)
 
     if new_unlock_at >= new_expires_at:
         raise RuntimeError("Computed invalid edited timestamps (unlock >= expiry)")
@@ -728,6 +735,96 @@ def step_optional_unlock_mapping(ctx: SmokeContext) -> None:
     log("Deadline reached without unlock; skipping status mapping verification")
 
 
+def step_retrieve_pending(ctx: SmokeContext) -> None:
+    log("Verifying retrieve endpoint returns pending pre-unlock")
+    current = ctx.client.api_json(
+        "GET",
+        "/secrets/status",
+        headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
+    )
+    if not current.get("exists"):
+        raise RuntimeError(f"Unexpected status before retrieve: {current!r}")
+    if current.get("status") == "available":
+        log("Secret already unlocked; skipping pending retrieve assertion to avoid consuming one-time retrieval")
+        return
+    if current.get("status") != "pending":
+        raise RuntimeError(f"Unexpected status before retrieve: {current!r}")
+
+    status, _, body = ctx.client.request(
+        "GET",
+        f"{ctx.client.base_url}/api/v1/secrets/retrieve",
+        headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
+    )
+    if status != 403:
+        raise RuntimeError(f"Expected 403 pending from retrieve, got {status} (preview={_preview_bytes(body)!r})")
+    try:
+        payload = json.loads(body.decode())
+    except json.JSONDecodeError as e:
+        raise RuntimeError(f"Expected JSON error body from retrieve: preview={_preview_bytes(body)!r}") from e
+
+    detail = payload.get("detail")
+    if not isinstance(detail, dict):
+        raise RuntimeError(f"Expected JSON detail object from retrieve: payload={payload!r}")
+    if detail.get("status") != "pending":
+        raise RuntimeError(f"Expected retrieve status 'pending', got {detail.get('status')!r}")
+    if "unlock_at" in detail:
+        unlock_at = parse_utc_datetime(str(detail["unlock_at"]))
+        if unlock_at != ctx.require_unlock_at():
+            raise RuntimeError(
+                "Retrieve pending unlock_at mismatch: "
+                f"expected={ctx.require_unlock_at().isoformat()} actual={unlock_at.isoformat()}"
+            )
+
+
+def step_retrieve_available_once(ctx: SmokeContext) -> None:
+    log("Waiting for unlock then retrieving (one-time delete)")
+
+    deadline = time.time() + UNLOCK_POLL_DEADLINE_SECONDS
+    while time.time() < deadline:
+        current = ctx.client.api_json(
+            "GET",
+            "/secrets/status",
+            headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
+        )
+        if current.get("exists") and current.get("status") == "available":
+            break
+        time.sleep(UNLOCK_POLL_SLEEP_SECONDS)
+    else:
+        raise RuntimeError("Secret did not unlock before retrieve deadline")
+
+    retrieved = ctx.client.api_json(
+        "GET",
+        "/secrets/retrieve",
+        headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
+    )
+    if retrieved.get("status") != "available":
+        raise RuntimeError(f"Expected retrieve status 'available', got {retrieved.get('status')!r}")
+    for field in ("ciphertext", "iv", "auth_tag"):
+        if not retrieved.get(field):
+            raise RuntimeError(f"Retrieve response missing {field}")
+
+    after = ctx.client.api_json(
+        "GET",
+        "/secrets/status",
+        headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
+    )
+    if after.get("exists") or after.get("status") != "not_found":
+        raise RuntimeError(f"Expected status not_found after retrieve, got {after!r}")
+
+    status2, _, body2 = ctx.client.request(
+        "GET",
+        f"{ctx.client.base_url}/api/v1/secrets/retrieve",
+        headers={"Authorization": f"Bearer {ctx.require_decrypt_token()}"},
+    )
+    if status2 not in (404, 410):
+        raise RuntimeError(f"Expected 404/410 on second retrieve, got {status2} (preview={_preview_bytes(body2)!r})")
+
+    secret_id = ctx.require_secret_id()
+    public_status = ctx.client.api_json("GET", f"/secrets/{secret_id}/status")
+    if public_status.get("status") != "retrieved":
+        raise RuntimeError(f"Expected public status 'retrieved' after retrieve, got '{public_status.get('status')}'")
+
+
 def skip_optional_unlock_mapping(ctx: SmokeContext) -> str | None:
     if not ctx.unlock_at:
         return "missing unlock_at"
@@ -735,6 +832,10 @@ def skip_optional_unlock_mapping(ctx: SmokeContext) -> str | None:
     if 0 < seconds_until_unlock <= UNLOCK_SOON_MAX_SECONDS:
         return None
     return "unlock not soon"
+
+
+def skip_retrieve_lifecycle(ctx: SmokeContext) -> str | None:
+    return skip_optional_unlock_mapping(ctx)
 
 
 def skip_web_disabled(_: SmokeContext) -> str | None:
@@ -796,9 +897,19 @@ def main() -> int:
                     Step("decrypt status", step_decrypt_status),
                     Step("public status", step_public_status),
                     Step(
+                        "retrieve pending",
+                        step_retrieve_pending,
+                        skip_reason=skip_retrieve_lifecycle,
+                    ),
+                    Step(
                         "optional unlock mapping",
                         step_optional_unlock_mapping,
                         skip_reason=skip_optional_unlock_mapping,
+                    ),
+                    Step(
+                        "retrieve available + delete",
+                        step_retrieve_available_once,
+                        skip_reason=skip_retrieve_lifecycle,
                     ),
                 ]
             )
