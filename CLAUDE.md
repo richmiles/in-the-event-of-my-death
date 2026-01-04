@@ -43,18 +43,19 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
   - PRs: `gh pr create`, `gh pr list`, `gh pr view <pr-number>`
   - PR reviews: prefer `--body-file` to avoid shell interpolation issues
     ```bash
-    cat > /tmp/review.md <<'EOF'
+    tmpfile="$(mktemp)"
+    cat > "$tmpfile" <<'EOF'
     Summary:
-    - ✅ LGTM overall
+    - Looks good overall
 
-    Notes:
-    - Consider adding an integration test for the new route.
+    Requested changes:
+    - Please add a test for the new edge case.
     EOF
 
-    gh pr review 123 --comment --body-file /tmp/review.md
+    gh pr review 123 --comment --body-file "$tmpfile"
     # or:
-    gh pr review 123 --request-changes --body-file /tmp/review.md
-    gh pr review 123 --approve --body-file /tmp/review.md
+    gh pr review 123 --request-changes --body-file "$tmpfile"
+    gh pr review 123 --approve --body-file "$tmpfile"
     ```
   - Workflows: `gh workflow run <name>`, `gh run list`, `gh run view <run-id>`
   - Projects: `gh project item-add <project-number> --owner richmiles --url <issue-url>`

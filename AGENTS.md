@@ -88,7 +88,8 @@ These CLIs are authenticated and available:
 When leaving review feedback with `gh pr review`, prefer `--body-file` to avoid shell interpolation/escaping issues (especially with backticks, `$VARS`, or code blocks).
 
 ```bash
-cat > /tmp/review.md <<'EOF'
+tmpfile="$(mktemp)"
+cat > "$tmpfile" <<'EOF'
 Summary:
 - Looks good overall.
 
@@ -96,10 +97,10 @@ Requested changes:
 - Please add a test for the new edge case.
 EOF
 
-gh pr review 123 --comment --body-file /tmp/review.md
+gh pr review 123 --comment --body-file "$tmpfile"
 # or:
-gh pr review 123 --request-changes --body-file /tmp/review.md
-gh pr review 123 --approve --body-file /tmp/review.md
+gh pr review 123 --request-changes --body-file "$tmpfile"
+gh pr review 123 --approve --body-file "$tmpfile"
 ```
 
 ---
