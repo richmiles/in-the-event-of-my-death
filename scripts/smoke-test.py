@@ -9,6 +9,8 @@ Tests the full secret creation flow:
 4. Create secret
 5. Check secret status via edit token
 6. Edit secret dates via edit token and re-check status
+7. Check secret status via decrypt token
+8. Check secret status via public id
 
 Usage:
     ./scripts/smoke-test.py https://staging.example.com
@@ -19,6 +21,7 @@ import argparse
 import base64
 import hashlib
 import json
+import re
 import secrets
 import sys
 import time
@@ -29,9 +32,48 @@ from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
 
+class ApiError(RuntimeError):
+    def __init__(self, status_code: int, body: str):
+        super().__init__(f"API error {status_code}: {body}")
+        self.status_code = status_code
+        self.body = body
+
+
+DEFAULT_UNLOCK_MINUTES = 10
+EXPIRY_GAP_MINUTES = 65
+MIN_UNLOCK_BUFFER_SECONDS = 5
+UNLOCK_SOON_MAX_SECONDS = 90
+UNLOCK_POLL_DEADLINE_SECONDS = 120
+UNLOCK_POLL_SLEEP_SECONDS = 2
+
+
 def log(msg: str) -> None:
     """Print timestamped log message."""
     print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}", flush=True)
+
+
+def api_request(
+    base_url: str,
+    method: str,
+    path: str,
+    data: dict | None = None,
+    headers: dict[str, str] | None = None,
+) -> dict:
+    """Make an API request and return JSON response."""
+    url = f"{base_url}/api/v1{path}"
+    req_headers = {"Content-Type": "application/json"}
+    if headers:
+        req_headers.update(headers)
+
+    body = json.dumps(data).encode() if data else None
+    request = Request(url, data=body, headers=req_headers, method=method)
+
+    try:
+        with urlopen(request, timeout=30) as response:
+            return json.loads(response.read().decode())
+    except HTTPError as e:
+        error_body = e.read().decode() if e.fp else ""
+        raise ApiError(e.code, error_body) from e
 
 
 def parse_utc_datetime(value: str) -> datetime:
@@ -74,28 +116,20 @@ def assert_timestamps_match(
     return True
 
 
-def api_request(
-    base_url: str,
-    method: str,
-    path: str,
-    data: dict | None = None,
-    headers: dict[str, str] | None = None,
-) -> dict:
-    """Make an API request and return JSON response."""
-    url = f"{base_url}/api/v1{path}"
-    req_headers = {"Content-Type": "application/json"}
-    if headers:
-        req_headers.update(headers)
+def compute_unlock_at_for_environment(api_error: ApiError) -> datetime | None:
+    """
+    If the API rejected unlock_at due to environment min unlock policy, return an adjusted unlock_at.
+    """
+    if api_error.status_code not in (400, 422):
+        return None
 
-    body = json.dumps(data).encode() if data else None
-    request = Request(url, data=body, headers=req_headers, method=method)
+    m = re.search(r"Unlock date must be at least (\\d+) minutes in the future", api_error.body)
+    if not m:
+        return None
 
-    try:
-        with urlopen(request, timeout=30) as response:
-            return json.loads(response.read().decode())
-    except HTTPError as e:
-        error_body = e.read().decode() if e.fp else ""
-        raise RuntimeError(f"API error {e.code}: {error_body}") from e
+    min_minutes = int(m.group(1))
+    now = datetime.now(timezone.utc)
+    return now + timedelta(minutes=min_minutes, seconds=MIN_UNLOCK_BUFFER_SECONDS)
 
 
 def http_get(
@@ -332,33 +366,43 @@ def run_full_smoke_test(base_url: str) -> bool:
     # Step 4: Create secret
     # Keep unlock safely in the future to avoid flakiness during slow runs.
     now = datetime.now(timezone.utc)
-    unlock_at = now + timedelta(minutes=10)
-    expires_at = unlock_at + timedelta(minutes=65)
+    unlock_at = (now + timedelta(minutes=DEFAULT_UNLOCK_MINUTES)).replace(microsecond=0)
+    expires_at = (unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)).replace(microsecond=0)
 
     log("Creating secret")
-    secret = api_request(
-        base_url,
-        "POST",
-        "/secrets",
-        data={
-            "ciphertext": ciphertext_b64,
-            "iv": iv_b64,
-            "auth_tag": auth_tag_b64,
-            "unlock_at": format_utc_datetime(unlock_at),
-            "expires_at": format_utc_datetime(expires_at),
-            "edit_token": edit_token,
-            "decrypt_token": decrypt_token,
-            "pow_proof": {
-                "challenge_id": challenge["challenge_id"],
-                "nonce": challenge["nonce"],
-                "counter": counter,
-                "payload_hash": payload_hash,
-            },
+    create_payload = {
+        "ciphertext": ciphertext_b64,
+        "iv": iv_b64,
+        "auth_tag": auth_tag_b64,
+        "unlock_at": format_utc_datetime(unlock_at),
+        "expires_at": format_utc_datetime(expires_at),
+        "edit_token": edit_token,
+        "decrypt_token": decrypt_token,
+        "pow_proof": {
+            "challenge_id": challenge["challenge_id"],
+            "nonce": challenge["nonce"],
+            "counter": counter,
+            "payload_hash": payload_hash,
         },
-    )
+    }
+
+    try:
+        secret = api_request(base_url, "POST", "/secrets", data=create_payload)
+    except ApiError as e:
+        adjusted_unlock_at = compute_unlock_at_for_environment(e)
+        if not adjusted_unlock_at:
+            raise
+        unlock_at = adjusted_unlock_at.replace(microsecond=0)
+        expires_at = (unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)).replace(microsecond=0)
+        create_payload["unlock_at"] = format_utc_datetime(unlock_at)
+        create_payload["expires_at"] = format_utc_datetime(expires_at)
+        log(f"Create rejected; retrying with unlock_at={create_payload['unlock_at']}")
+        secret = api_request(base_url, "POST", "/secrets", data=create_payload)
+
+    secret_id = secret["secret_id"]
     created_unlock_at = parse_utc_datetime(secret["unlock_at"])
     created_expires_at = parse_utc_datetime(secret["expires_at"])
-    log(f"Secret created: id={secret['secret_id']}, unlock_at={secret['unlock_at']}")
+    log(f"Secret created: id={secret_id}, unlock_at={secret['unlock_at']}")
 
     # Step 5: Check status via edit token
     log("Checking secret status via edit token")
@@ -456,6 +500,71 @@ def run_full_smoke_test(base_url: str) -> bool:
     ):
         return False
 
+    # Step 7: Check status via decrypt token (should not consume the secret)
+    log("Checking secret status via decrypt token")
+    decrypt_status = api_request(
+        base_url,
+        "GET",
+        "/secrets/status",
+        headers={"Authorization": f"Bearer {decrypt_token}"},
+    )
+
+    if not decrypt_status.get("exists"):
+        log("ERROR: Secret not found via decrypt token")
+        return False
+
+    if decrypt_status.get("status") not in ("pending", "available"):
+        log(f"ERROR: Unexpected decrypt status '{decrypt_status.get('status')}'")
+        return False
+
+    # Step 8: Check public status via secret ID and assert consistent status mapping
+    log("Checking secret status via public ID endpoint")
+    public_status = api_request(base_url, "GET", f"/secrets/{secret_id}/status")
+
+    if public_status.get("id") != secret_id:
+        log("ERROR: Public status endpoint returned mismatched secret id")
+        return False
+
+    expected_public_status = (
+        "unlocked" if decrypt_status.get("status") == "available" else decrypt_status.get("status")
+    )
+    if public_status.get("status") != expected_public_status:
+        log(
+            f"ERROR: Expected public status '{expected_public_status}', got '{public_status.get('status')}'"
+        )
+        return False
+
+    # Optional: if unlock happens soon, wait briefly and verify available->unlocked mapping.
+    # (Keep bounded to avoid long smoke runtimes.)
+    try:
+        unlock_at_api = parse_utc_datetime(secret["unlock_at"])
+        seconds_until_unlock = (unlock_at_api - datetime.now(timezone.utc)).total_seconds()
+    except (KeyError, TypeError, ValueError):
+        seconds_until_unlock = 9999
+
+    if 0 < seconds_until_unlock <= UNLOCK_SOON_MAX_SECONDS:
+        log("Waiting briefly for unlock to verify status mapping")
+        deadline = time.time() + UNLOCK_POLL_DEADLINE_SECONDS
+        while time.time() < deadline:
+            current = api_request(
+                base_url,
+                "GET",
+                "/secrets/status",
+                headers={"Authorization": f"Bearer {decrypt_token}"},
+            )
+            if current.get("exists") and current.get("status") == "available":
+                public_current = api_request(base_url, "GET", f"/secrets/{secret_id}/status")
+                if public_current.get("status") != "unlocked":
+                    log(
+                        f"ERROR: Expected public status 'unlocked' after available, got '{public_current.get('status')}'"
+                    )
+                    return False
+                break
+            time.sleep(UNLOCK_POLL_SLEEP_SECONDS)
+        else:
+            log("Deadline reached without unlock; skipping status mapping verification")
+
+    # Note: we intentionally don't clean up created secrets; they expire naturally.
     log("Full smoke test PASSED")
     return True
 
