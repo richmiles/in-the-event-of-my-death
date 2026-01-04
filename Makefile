@@ -34,7 +34,12 @@ backend: migrate backend-server
 frontend:
 	cd frontend && npm run dev -- --port $(FRONTEND_PORT)
 
-dev: minio migrate
+dev: migrate
+	@if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then \
+		$(MAKE) minio; \
+	else \
+		echo "Skipping MinIO (Docker not installed or not running)"; \
+	fi
 	@echo "Starting backend and frontend..."
 	@echo "Backend: http://localhost:$(BACKEND_PORT)"
 	@echo "Frontend: http://localhost:$(FRONTEND_PORT)"

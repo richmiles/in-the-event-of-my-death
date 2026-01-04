@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import aioboto3
 from botocore.config import Config as BotoConfig
@@ -47,14 +48,20 @@ class ObjectStorageConfig:
 class ObjectStorageService:
     def __init__(self, settings: Settings) -> None:
         self._enabled = settings.object_storage_enabled
-        self._config = ObjectStorageConfig.from_settings(settings) if self._enabled else None
+        self._settings = settings
+        self._config: ObjectStorageConfig | None = None
+        self._session: aioboto3.Session | None = None
 
     def _require_enabled(self) -> ObjectStorageConfig:
-        if not self._enabled or self._config is None:
+        if not self._enabled:
             raise RuntimeError("Object storage is not enabled (set OBJECT_STORAGE_ENABLED=true)")
+        if self._config is None:
+            self._config = ObjectStorageConfig.from_settings(self._settings)
+        if self._session is None:
+            self._session = aioboto3.Session()
         return self._config
 
-    def _client_kwargs(self, config: ObjectStorageConfig) -> dict:
+    def _client_kwargs(self, config: ObjectStorageConfig) -> dict[str, Any]:
         return {
             "service_name": "s3",
             "endpoint_url": config.endpoint,
@@ -72,7 +79,9 @@ class ObjectStorageService:
         content_type: str = "application/octet-stream",
     ) -> None:
         config = self._require_enabled()
-        session = aioboto3.Session()
+        session = self._session
+        if session is None:
+            raise RuntimeError("Object storage session was not initialized")
         async with session.client(**self._client_kwargs(config)) as s3:
             await s3.put_object(
                 Bucket=config.bucket,
@@ -83,7 +92,9 @@ class ObjectStorageService:
 
     async def download_bytes(self, *, object_key: str) -> bytes:
         config = self._require_enabled()
-        session = aioboto3.Session()
+        session = self._session
+        if session is None:
+            raise RuntimeError("Object storage session was not initialized")
         async with session.client(**self._client_kwargs(config)) as s3:
             response = await s3.get_object(Bucket=config.bucket, Key=object_key)
             body = response["Body"]
@@ -91,6 +102,8 @@ class ObjectStorageService:
 
     async def delete_object(self, *, object_key: str) -> None:
         config = self._require_enabled()
-        session = aioboto3.Session()
+        session = self._session
+        if session is None:
+            raise RuntimeError("Object storage session was not initialized")
         async with session.client(**self._client_kwargs(config)) as s3:
             await s3.delete_object(Bucket=config.bucket, Key=object_key)

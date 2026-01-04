@@ -15,6 +15,7 @@ services:
     image: minio/mc:latest
     depends_on:
       - minio
+    restart: "on-failure"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ieomd}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-ieomd-local-dev}
@@ -23,6 +24,8 @@ services:
       - /bin/sh
       - -ec
       - |
-        mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
-        mc mb -p "local/$OBJECT_STORAGE_BUCKET" || true
-        mc anonymous set none "local/$OBJECT_STORAGE_BUCKET" || true
+        until mc alias set local http://minio:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"; do
+          sleep 1
+        done
+        mc mb -p "local/$OBJECT_STORAGE_BUCKET" || mc ls "local/$OBJECT_STORAGE_BUCKET" >/dev/null
+        mc anonymous set none "local/$OBJECT_STORAGE_BUCKET"
