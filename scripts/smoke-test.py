@@ -17,13 +17,15 @@ Usage:
 import argparse
 import base64
 import hashlib
+import json
 import secrets
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
-import json
 
 
 def log(msg: str) -> None:
@@ -53,6 +55,113 @@ def api_request(
     except HTTPError as e:
         error_body = e.read().decode() if e.fp else ""
         raise RuntimeError(f"API error {e.code}: {error_body}") from e
+
+
+def http_get(url: str, timeout: float = 30.0, headers: dict | None = None) -> tuple[int, dict, bytes]:
+    req = Request(url, headers=headers or {}, method="GET")
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            return response.getcode(), dict(response.headers.items()), response.read()
+    except HTTPError as e:
+        error_body = e.read() if e.fp else b""
+        raise RuntimeError(f"HTTP error {e.code} for {url}: {error_body[:500]!r}") from e
+
+
+class _HTMLAssetParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asset_urls: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = dict(attrs)
+
+        if tag == "script":
+            src = attrs_dict.get("src")
+            if src:
+                self.asset_urls.append(src)
+
+        if tag == "link":
+            rel = (attrs_dict.get("rel") or "").lower()
+            href = attrs_dict.get("href")
+            if href and "stylesheet" in rel:
+                self.asset_urls.append(href)
+
+
+def check_web_serving(base_url: str) -> bool:
+    """
+    Verify the web frontend is being served.
+
+    - GET / returns 200 and looks like HTML
+    - At least one referenced same-origin asset (script/css) loads (200)
+    """
+    homepage_url = f"{base_url}/"
+    log(f"Checking web homepage: {homepage_url}")
+    status, resp_headers, body = http_get(homepage_url, timeout=20.0)
+    if status != 200:
+        raise RuntimeError(f"Homepage returned non-200: {status}")
+
+    content_type = (resp_headers.get("Content-Type") or "").lower()
+    if "text/html" not in content_type:
+        raise RuntimeError(f"Homepage Content-Type not HTML: {content_type!r}")
+
+    if not body or len(body) < 200:
+        raise RuntimeError(f"Homepage response too small ({len(body)} bytes)")
+
+    body_text = body.decode("utf-8", errors="replace")
+    parser = _HTMLAssetParser()
+    parser.feed(body_text)
+
+    base_netloc = urlparse(base_url).netloc
+    base_labels = [label for label in base_netloc.split(".") if label]
+    base_root_domain = ".".join(base_labels[-2:]) if len(base_labels) >= 2 else base_netloc
+
+    def is_allowed_asset_host(host: str) -> bool:
+        return host == base_netloc or host == base_root_domain or host.endswith(f".{base_root_domain}")
+
+    def looks_like_static_asset(path: str) -> bool:
+        lower = path.lower()
+        return (
+            "/assets/" in lower
+            or lower.endswith(".js")
+            or lower.endswith(".mjs")
+            or lower.endswith(".css")
+        )
+
+    resolved_assets: list[str] = []
+    for asset_url in parser.asset_urls:
+        absolute = urljoin(homepage_url, asset_url)
+        parsed = urlparse(absolute)
+        if parsed.scheme not in {"http", "https"}:
+            continue
+        if not looks_like_static_asset(parsed.path):
+            continue
+        if not is_allowed_asset_host(parsed.netloc):
+            continue
+        resolved_assets.append(absolute)
+
+    unique_assets = list(dict.fromkeys(resolved_assets))
+    if not unique_assets:
+        raw_assets = list(dict.fromkeys(parser.asset_urls))[:10]
+        raise RuntimeError(
+            "No loadable JS/CSS assets found in homepage HTML "
+            f"(base_host={base_netloc!r}, base_root={base_root_domain!r}, found={raw_assets!r})"
+        )
+
+    # Fetch at most 2 assets to keep runtime low while still catching broken static hosting.
+    for asset_url in unique_assets[:2]:
+        log(f"Fetching asset: {asset_url}")
+        asset_status, _, asset_body = http_get(
+            asset_url,
+            timeout=20.0,
+            headers={"Accept": "*/*"},
+        )
+        if asset_status != 200:
+            raise RuntimeError(f"Asset returned non-200: {asset_status} ({asset_url})")
+        if not asset_body:
+            raise RuntimeError(f"Asset returned empty body: {asset_url}")
+
+    log(f"Web checks passed (assets fetched: {min(len(unique_assets), 2)}/{len(unique_assets)})")
+    return True
 
 
 def wait_for_health(base_url: str, max_attempts: int = 30, delay: float = 2.0) -> bool:
@@ -212,6 +321,11 @@ def main() -> int:
         help="Only run health check, skip full flow",
     )
     parser.add_argument(
+        "--skip-web",
+        action="store_true",
+        help="Skip web homepage/assets checks (not recommended for staging/prod)",
+    )
+    parser.add_argument(
         "--max-health-attempts",
         type=int,
         default=30,
@@ -233,6 +347,8 @@ def main() -> int:
 
     # Run full smoke test
     try:
+        if not args.skip_web:
+            check_web_serving(base_url)
         if run_full_smoke_test(base_url):
             return 0
         return 1
