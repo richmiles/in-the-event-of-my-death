@@ -91,7 +91,7 @@ class _HTMLAssetParser(HTMLParser):
                 self.asset_urls.append(href)
 
 
-def check_web_serving(base_url: str) -> bool:
+def check_web_serving(base_url: str) -> None:
     """
     Verify the web frontend is being served.
 
@@ -118,12 +118,21 @@ def check_web_serving(base_url: str) -> bool:
     parser = _HTMLAssetParser()
     parser.feed(body_text)
 
-    base_netloc = urlparse(base_url).netloc
-    base_labels = [label for label in base_netloc.split(".") if label]
-    base_root_domain = ".".join(base_labels[-2:]) if len(base_labels) >= 2 else base_netloc
+    base_parsed = urlparse(base_url)
+    base_netloc = base_parsed.netloc
+    base_hostname = base_parsed.hostname
+    if not base_hostname:
+        raise RuntimeError(f"Unable to parse hostname from base_url: {base_url!r}")
 
-    def is_allowed_asset_host(host: str) -> bool:
-        return host == base_netloc or host == base_root_domain or host.endswith(f".{base_root_domain}")
+    base_labels = [label for label in base_hostname.split(".") if label]
+    base_root_domain = ".".join(base_labels[-2:]) if len(base_labels) >= 2 else base_hostname
+
+    def is_allowed_asset_host(hostname: str) -> bool:
+        return (
+            hostname == base_hostname
+            or hostname == base_root_domain
+            or hostname.endswith(f".{base_root_domain}")
+        )
 
     def looks_like_static_asset(path: str) -> bool:
         lower = path.lower()
@@ -142,7 +151,7 @@ def check_web_serving(base_url: str) -> bool:
             continue
         if not looks_like_static_asset(parsed.path):
             continue
-        if not is_allowed_asset_host(parsed.netloc):
+        if not parsed.hostname or not is_allowed_asset_host(parsed.hostname):
             continue
         resolved_assets.append(absolute)
 
@@ -155,7 +164,8 @@ def check_web_serving(base_url: str) -> bool:
         raw_assets = list(dict.fromkeys(parser.asset_urls))[:10]
         raise RuntimeError(
             "No loadable JS/CSS assets found in homepage HTML "
-            f"(base_host={base_netloc!r}, base_root={base_root_domain!r}, found={raw_assets!r})"
+            f"(base_netloc={base_netloc!r}, base_host={base_hostname!r}, "
+            f"base_root={base_root_domain!r}, found={raw_assets!r})"
         )
 
     # Fetch at most 2 assets to keep runtime low while still catching broken static hosting.
@@ -172,7 +182,7 @@ def check_web_serving(base_url: str) -> bool:
             raise RuntimeError(f"Asset returned empty body: {asset_url}")
 
     log(f"Web checks passed (assets fetched: {min(len(unique_assets), 2)}/{len(unique_assets)})")
-    return True
+    return None
 
 
 def wait_for_health(base_url: str, max_attempts: int = 30, delay: float = 2.0) -> bool:
