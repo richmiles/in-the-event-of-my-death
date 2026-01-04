@@ -21,6 +21,7 @@ export default function Home() {
   const [message, setMessage] = useState('')
   const [files, setFiles] = useState<File[]>([])
   const [capabilityToken, setCapabilityToken] = useState('')
+  const [showCapabilityToken, setShowCapabilityToken] = useState(false)
   const [unlockPreset, setUnlockPreset] = useState<UnlockPreset>('now')
   const [customUnlockDate, setCustomUnlockDate] = useState('')
   const [customUnlockTime, setCustomUnlockTime] = useState('00:00')
@@ -42,6 +43,7 @@ export default function Home() {
   const [expiryOpen, setExpiryOpen] = useState(false)
   const unlockRef = useRef<HTMLDivElement>(null)
   const expiryRef = useRef<HTMLDivElement>(null)
+  const attachmentInputRef = useRef<HTMLInputElement>(null)
 
   // Tick state to trigger re-renders for live time updates
   const [, setTick] = useState(0)
@@ -247,6 +249,7 @@ export default function Home() {
     setMessage('')
     setFiles([])
     setCapabilityToken('')
+    setShowCapabilityToken(false)
     setUnlockPreset('now')
     setCustomUnlockDate('')
     setCustomUnlockTime('00:00')
@@ -257,6 +260,27 @@ export default function Home() {
     setCreatedExpiresAt(null)
     setLinks(null)
     setError(null)
+  }
+
+  const openAttachmentPicker = () => {
+    attachmentInputRef.current?.click()
+  }
+
+  const addFiles = (incoming: File[]) => {
+    if (incoming.length === 0) return
+    setFiles((existing) => {
+      const next = [...existing]
+      for (const file of incoming) {
+        const key = `${file.name}:${file.size}:${file.lastModified}`
+        const already = next.some((f) => `${f.name}:${f.size}:${f.lastModified}` === key)
+        if (!already) next.push(file)
+      }
+      return next
+    })
+  }
+
+  const removeFileAt = (index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index))
   }
 
   if (step === 'processing') {
@@ -378,7 +402,14 @@ export default function Home() {
       <div className="hero-form">
         <p className="hero-title">In The Event Of My Death</p>
         <form onSubmit={handleSubmit} className="inline-form">
-          <div className="message-input-container">
+          <div
+            className="message-input-container"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault()
+              addFiles(Array.from(e.dataTransfer.files))
+            }}
+          >
             <textarea
               id="message"
               value={message}
@@ -387,39 +418,80 @@ export default function Home() {
               rows={4}
               autoFocus
             />
-          </div>
+            <div className="composer-bar">
+              <input
+                ref={attachmentInputRef}
+                id="attachments"
+                type="file"
+                multiple
+                className="composer-file-input"
+                onChange={(e) => addFiles(e.target.files ? Array.from(e.target.files) : [])}
+              />
+              <button
+                type="button"
+                className="composer-attach-button"
+                onClick={openAttachmentPicker}
+                aria-label="Attach files"
+                title="Attach files"
+              >
+                <span aria-hidden="true">📎</span>
+              </button>
+              <div className="composer-hint">
+                Drop files here or click to attach
+                {files.length > 0 && (
+                  <>
+                    {' '}
+                    • {files.length} file{files.length === 1 ? '' : 's'} (
+                    {Math.round(files.reduce((sum, f) => sum + f.size, 0) / 1024)} KB)
+                  </>
+                )}
+              </div>
+            </div>
 
-          <div className="message-input-container">
-            <label htmlFor="attachments" className="sr-only">
-              Attach files
-            </label>
-            <input
-              id="attachments"
-              type="file"
-              multiple
-              onChange={(e) => setFiles(e.target.files ? Array.from(e.target.files) : [])}
-            />
             {files.length > 0 && (
-              <div className="helper-text">
-                Attached {files.length} file{files.length === 1 ? '' : 's'} (
-                {Math.round(files.reduce((sum, f) => sum + f.size, 0) / 1024)} KB)
+              <div className="attachment-chips" aria-label="Attachments">
+                {files.map((file, index) => (
+                  <div
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    className="attachment-chip"
+                  >
+                    <span className="attachment-chip-name" title={file.name}>
+                      {file.name}
+                    </span>
+                    <button
+                      type="button"
+                      className="attachment-chip-remove"
+                      onClick={() => removeFileAt(index)}
+                      aria-label={`Remove ${file.name}`}
+                      title="Remove"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
           <div className="message-input-container">
-            <label htmlFor="capabilityToken" className="sr-only">
-              Capability token
-            </label>
-            <input
-              id="capabilityToken"
-              type="text"
-              inputMode="text"
-              autoComplete="off"
-              placeholder="Capability token (optional, for large files)"
-              value={capabilityToken}
-              onChange={(e) => setCapabilityToken(e.target.value)}
-            />
+            <button
+              type="button"
+              className="linkish-button"
+              onClick={() => setShowCapabilityToken((s) => !s)}
+            >
+              {showCapabilityToken ? 'Hide capability token' : 'Have a capability token?'}
+            </button>
+            {showCapabilityToken && (
+              <input
+                id="capabilityToken"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                placeholder="Capability token (optional, for large files)"
+                value={capabilityToken}
+                onChange={(e) => setCapabilityToken(e.target.value)}
+              />
+            )}
           </div>
 
           <button
