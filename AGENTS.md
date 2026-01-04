@@ -26,7 +26,9 @@ This repo is a small monorepo:
    git fetch origin
    git worktree add ../ieomd-<issue-number> -b <type>/<issue-number>-<short-description> origin/main
    cd ../ieomd-<issue-number>
+   make install
    ```
+   - Run `make install` once per worktree (each worktree has its own `node_modules` and Poetry virtualenv)
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
    - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
    - If the branch already exists, create a worktree from it: `git worktree add ../ieomd-<issue-number> <branch-name>`
@@ -81,6 +83,26 @@ These CLIs are authenticated and available:
 - **`gh`** - GitHub CLI for issues, PRs, workflows, projects, and API calls
 - **`doctl`** - DigitalOcean CLI for droplet management and infrastructure
 - **`ssh`** - Direct server access via `ssh root@<ip>` (root is intentional; get IPs from `doctl compute droplet list`)
+
+## Posting PR Review Notes via `gh`
+When leaving review feedback with `gh pr review`, prefer `--body-file` to avoid shell interpolation/escaping issues (especially with backticks, `$VARS`, or code blocks).
+
+```bash
+tmpfile="$(mktemp)"
+trap 'rm -f "$tmpfile"' EXIT
+cat > "$tmpfile" <<'EOF'
+Summary:
+- Looks good overall
+
+Requested changes:
+- Please add a test for the new edge case
+EOF
+
+gh pr review 123 --comment --body-file "$tmpfile"
+# or:
+gh pr review 123 --request-changes --body-file "$tmpfile"
+gh pr review 123 --approve --body-file "$tmpfile"
+```
 
 ---
 
