@@ -17,13 +17,15 @@ Usage:
 import argparse
 import base64
 import hashlib
+import json
 import secrets
 import sys
 import time
 from datetime import datetime, timedelta, timezone
+from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
+from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
-import json
 
 
 def log(msg: str) -> None:
@@ -36,7 +38,7 @@ def api_request(
     method: str,
     path: str,
     data: dict | None = None,
-    headers: dict | None = None,
+    headers: dict[str, str] | None = None,
 ) -> dict:
     """Make an API request and return JSON response."""
     url = f"{base_url}/api/v1{path}"
@@ -53,6 +55,140 @@ def api_request(
     except HTTPError as e:
         error_body = e.read().decode() if e.fp else ""
         raise RuntimeError(f"API error {e.code}: {error_body}") from e
+
+
+def http_get(
+    url: str,
+    timeout: float = 30.0,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], bytes]:
+    req = Request(url, headers=headers or {}, method="GET")
+    try:
+        with urlopen(req, timeout=timeout) as response:
+            return response.getcode(), dict(response.headers.items()), response.read()
+    except HTTPError as e:
+        error_body = e.read() if e.fp else b""
+        resp_headers = dict(e.headers.items()) if e.headers else {}
+        return e.code, resp_headers, error_body
+
+
+class _HTMLAssetParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.asset_urls: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        attrs_dict = {k: v for k, v in attrs if v is not None}
+
+        if tag == "script":
+            src = attrs_dict.get("src")
+            if src:
+                self.asset_urls.append(src)
+
+        if tag == "link":
+            rel = (attrs_dict.get("rel") or "").lower()
+            href = attrs_dict.get("href")
+            if not href:
+                return
+            # Vite commonly uses <link rel="modulepreload" href="..."> for JS chunks.
+            if any(token in rel for token in ("stylesheet", "modulepreload", "preload")):
+                self.asset_urls.append(href)
+
+
+def check_web_serving(base_url: str) -> None:
+    """
+    Verify the web frontend is being served.
+
+    - GET / returns 200 and looks like HTML
+    - At least one referenced same-origin asset (script/css) loads (200)
+    """
+    homepage_url = f"{base_url}/"
+    log(f"Checking web homepage: {homepage_url}")
+    status, resp_headers, body = http_get(homepage_url, timeout=20.0)
+    content_type_header = next(
+        (v for k, v in resp_headers.items() if k.lower() == "content-type"),
+        "",
+    )
+    if status != 200:
+        raise RuntimeError(
+            f"Homepage returned non-200: {status} "
+            f"(content_type={content_type_header!r}, body_preview={body[:200]!r})"
+        )
+
+    content_type = content_type_header.lower()
+    if "text/html" not in content_type:
+        raise RuntimeError(f"Homepage Content-Type not HTML: {content_type!r}")
+
+    if not body:
+        raise RuntimeError("Homepage returned empty body")
+
+    body_text = body.decode("utf-8", errors="replace")
+    if 'id="root"' not in body_text and "id='root'" not in body_text:
+        if len(body) < 200:
+            raise RuntimeError(
+                "Homepage HTML missing expected root marker and is unexpectedly small "
+                f"({len(body)} bytes, preview={body[:200]!r})"
+            )
+        log("WARNING: Homepage HTML missing expected root marker (id=\"root\"); continuing")
+
+    parser = _HTMLAssetParser()
+    parser.feed(body_text)
+
+    base_parsed = urlparse(base_url)
+    base_netloc = base_parsed.netloc
+    if not base_netloc:
+        raise RuntimeError(f"Unable to parse netloc from base_url: {base_url!r}")
+
+    def looks_like_static_asset(path: str) -> bool:
+        lower = path.lower()
+        return (
+            "/assets/" in lower
+            or lower.endswith(".js")
+            or lower.endswith(".mjs")
+            or lower.endswith(".css")
+        )
+
+    resolved_assets: list[str] = []
+    for asset_url in parser.asset_urls:
+        absolute = urljoin(homepage_url, asset_url)
+        parsed = urlparse(absolute)
+        if parsed.scheme not in {"http", "https"}:
+            continue
+        if not looks_like_static_asset(parsed.path):
+            continue
+        # "Same-origin" for smoke test purposes: same scheme/host/port.
+        if parsed.netloc != base_netloc:
+            continue
+        resolved_assets.append(absolute)
+
+    unique_assets = list(dict.fromkeys(resolved_assets))
+    log(
+        "Assets discovered: "
+        f"raw={len(parser.asset_urls)} candidates={len(resolved_assets)} unique={len(unique_assets)}"
+    )
+    if not unique_assets:
+        raw_assets = list(dict.fromkeys(parser.asset_urls))[:10]
+        raise RuntimeError(
+            "No loadable same-origin JS/CSS assets found in homepage HTML "
+            f"(base_netloc={base_netloc!r}, found={raw_assets!r})"
+        )
+
+    # Fetch at most 1 asset to keep runtime low while still catching broken static hosting.
+    for asset_url in unique_assets[:1]:
+        log(f"Fetching asset: {asset_url}")
+        asset_status, _, asset_body = http_get(
+            asset_url,
+            timeout=20.0,
+            headers={"Accept": "*/*"},
+        )
+        if asset_status != 200:
+            raise RuntimeError(
+                f"Asset returned non-200: {asset_status} ({asset_url}, preview={asset_body[:200]!r})"
+            )
+        if not asset_body:
+            raise RuntimeError(f"Asset returned empty body: {asset_url}")
+
+    log("Web checks passed (assets fetched: 1)")
 
 
 def wait_for_health(base_url: str, max_attempts: int = 30, delay: float = 2.0) -> bool:
@@ -212,6 +348,11 @@ def main() -> int:
         help="Only run health check, skip full flow",
     )
     parser.add_argument(
+        "--skip-web",
+        action="store_true",
+        help="Skip web homepage/assets checks (not recommended for staging/prod)",
+    )
+    parser.add_argument(
         "--max-health-attempts",
         type=int,
         default=30,
@@ -233,6 +374,8 @@ def main() -> int:
 
     # Run full smoke test
     try:
+        if not args.skip_web:
+            check_web_serving(base_url)
         if run_full_smoke_test(base_url):
             return 0
         return 1
