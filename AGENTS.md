@@ -82,6 +82,24 @@ These CLIs are authenticated and available:
 - **`doctl`** - DigitalOcean CLI for droplet management and infrastructure
 - **`ssh`** - Direct server access via `ssh root@<ip>` (root is intentional; get IPs from `doctl compute droplet list`)
 
+## Posting PR Review Notes via `gh`
+When leaving review feedback with `gh pr review`, prefer `--body-file` to avoid shell interpolation/escaping issues (especially with backticks, `$VARS`, or code blocks).
+
+```bash
+cat > /tmp/review.md <<'EOF'
+Summary:
+- Looks good overall.
+
+Requested changes:
+- Please add a test for the new edge case.
+EOF
+
+gh pr review 123 --comment --body-file /tmp/review.md
+# or:
+gh pr review 123 --request-changes --body-file /tmp/review.md
+gh pr review 123 --approve --body-file /tmp/review.md
+```
+
 ---
 
 ## Running Multiple Dev Servers

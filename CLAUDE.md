@@ -41,6 +41,21 @@ Claude has authenticated access to these CLIs for infrastructure and repo manage
 - **`gh`** - GitHub CLI (authenticated)
   - Issues: `gh issue list`, `gh issue create`, `gh issue view <issue-number>`
   - PRs: `gh pr create`, `gh pr list`, `gh pr view <pr-number>`
+  - PR reviews: prefer `--body-file` to avoid shell interpolation issues
+    ```bash
+    cat > /tmp/review.md <<'EOF'
+    Summary:
+    - ✅ LGTM overall
+
+    Notes:
+    - Consider adding an integration test for the new route.
+    EOF
+
+    gh pr review 123 --comment --body-file /tmp/review.md
+    # or:
+    gh pr review 123 --request-changes --body-file /tmp/review.md
+    gh pr review 123 --approve --body-file /tmp/review.md
+    ```
   - Workflows: `gh workflow run <name>`, `gh run list`, `gh run view <run-id>`
   - Projects: `gh project item-add <project-number> --owner richmiles --url <issue-url>`
   - API: `gh api <endpoint>` for any GitHub API call
