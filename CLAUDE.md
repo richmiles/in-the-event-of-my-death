@@ -100,11 +100,11 @@ gh pr review 123 --approve --body-file "$tmpfile"
    cd ../ieomd-<issue-number>
    make install
    ```
+   - Run `make install` once per worktree (each worktree has its own `node_modules` and Poetry virtualenv)
    - Example: `git worktree add ../ieomd-64 -b feature/64-file-uploads`
    - Use `feature/`, `fix/`, or `docs/` prefix per branch naming rules below
    - This is required for ALL work (including small docs changes), not just parallel work
    - All work must be done inside the issue worktree (not the main checkout)
-   - Run `make install` once per worktree (each worktree has its own `node_modules` and Poetry virtualenv)
    - If the branch already exists, create a worktree from it: `git worktree add ../ieomd-<issue-number> <branch-name>`
    - If already in the correct issue worktree, proceed without creating a new one
 
