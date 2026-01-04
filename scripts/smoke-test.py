@@ -17,6 +17,7 @@ Usage:
 import argparse
 import base64
 import hashlib
+import ipaddress
 import json
 import secrets
 import sys
@@ -128,10 +129,19 @@ def check_web_serving(base_url: str) -> None:
     if not base_hostname:
         raise RuntimeError(f"Unable to parse hostname from base_url: {base_url!r}")
 
+    is_ip_host = False
+    try:
+        ipaddress.ip_address(base_hostname)
+        is_ip_host = True
+    except ValueError:
+        is_ip_host = False
+
     base_labels = [label for label in base_hostname.split(".") if label]
     base_root_domain = ".".join(base_labels[-2:]) if len(base_labels) >= 2 else base_hostname
 
     def is_allowed_asset_host(hostname: str) -> bool:
+        if is_ip_host:
+            return hostname == base_hostname
         return (
             hostname == base_hostname
             or hostname == base_root_domain
@@ -186,7 +196,6 @@ def check_web_serving(base_url: str) -> None:
             raise RuntimeError(f"Asset returned empty body: {asset_url}")
 
     log(f"Web checks passed (assets fetched: {min(len(unique_assets), 2)}/{len(unique_assets)})")
-    return None
 
 
 def wait_for_health(base_url: str, max_attempts: int = 30, delay: float = 2.0) -> bool:
