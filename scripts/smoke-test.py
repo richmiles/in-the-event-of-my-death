@@ -8,8 +8,9 @@ Tests the full secret creation flow:
 3. Solve PoW
 4. Create secret
 5. Check secret status via edit token
-6. Check secret status via decrypt token
-7. Check secret status via public id
+6. Edit secret dates via edit token and re-check status
+7. Check secret status via decrypt token
+8. Check secret status via public id
 
 Usage:
     ./scripts/smoke-test.py https://staging.example.com
@@ -38,7 +39,7 @@ class ApiError(RuntimeError):
         self.body = body
 
 
-SHORT_UNLOCK_SECONDS = 20
+DEFAULT_UNLOCK_MINUTES = 10
 EXPIRY_GAP_MINUTES = 65
 MIN_UNLOCK_BUFFER_SECONDS = 5
 UNLOCK_SOON_MAX_SECONDS = 90
@@ -76,7 +77,43 @@ def api_request(
 
 
 def parse_utc_datetime(value: str) -> datetime:
-    return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    """
+    Parse an API UTC datetime string.
+
+    Backend responses are expected to be ISO-like with a trailing "Z"
+    (e.g., "2025-01-01T12:34:56Z").
+    """
+    if not isinstance(value, str) or not value:
+        raise ValueError(f"Invalid datetime value: {value!r}")
+
+    if value.endswith("Z"):
+        return datetime.strptime(value, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def format_utc_datetime(dt: datetime) -> str:
+    dt_utc = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt_utc.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def assert_timestamps_match(
+    label: str,
+    expected_unlock_at: datetime,
+    expected_expires_at: datetime,
+    actual_unlock_at: datetime,
+    actual_expires_at: datetime,
+) -> bool:
+    if actual_unlock_at != expected_unlock_at or actual_expires_at != expected_expires_at:
+        log(
+            f"ERROR: {label}: expected=({expected_unlock_at.isoformat()}, {expected_expires_at.isoformat()}) "
+            f"actual=({actual_unlock_at.isoformat()}, {actual_expires_at.isoformat()})"
+        )
+        return False
+    return True
 
 
 def compute_unlock_at_for_environment(api_error: ApiError) -> datetime | None:
@@ -86,7 +123,7 @@ def compute_unlock_at_for_environment(api_error: ApiError) -> datetime | None:
     if api_error.status_code not in (400, 422):
         return None
 
-    m = re.search(r"Unlock date must be at least (\d+) minutes in the future", api_error.body)
+    m = re.search(r"Unlock date must be at least (\\d+) minutes in the future", api_error.body)
     if not m:
         return None
 
@@ -327,18 +364,18 @@ def run_full_smoke_test(base_url: str) -> bool:
     counter = solve_pow(challenge["nonce"], payload_hash, challenge["difficulty"])
 
     # Step 4: Create secret
-    # Keep unlock short when allowed (faster smoke), but adapt if env enforces a minimum.
+    # Keep unlock safely in the future to avoid flakiness during slow runs.
     now = datetime.now(timezone.utc)
-    unlock_at = now + timedelta(seconds=SHORT_UNLOCK_SECONDS)
-    expires_at = unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)
+    unlock_at = (now + timedelta(minutes=DEFAULT_UNLOCK_MINUTES)).replace(microsecond=0)
+    expires_at = (unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)).replace(microsecond=0)
 
     log("Creating secret")
     create_payload = {
         "ciphertext": ciphertext_b64,
         "iv": iv_b64,
         "auth_tag": auth_tag_b64,
-        "unlock_at": unlock_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "expires_at": expires_at.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "unlock_at": format_utc_datetime(unlock_at),
+        "expires_at": format_utc_datetime(expires_at),
         "edit_token": edit_token,
         "decrypt_token": decrypt_token,
         "pow_proof": {
@@ -355,14 +392,16 @@ def run_full_smoke_test(base_url: str) -> bool:
         adjusted_unlock_at = compute_unlock_at_for_environment(e)
         if not adjusted_unlock_at:
             raise
-        unlock_at = adjusted_unlock_at
-        expires_at = unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)
-        create_payload["unlock_at"] = unlock_at.strftime("%Y-%m-%dT%H:%M:%SZ")
-        create_payload["expires_at"] = expires_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+        unlock_at = adjusted_unlock_at.replace(microsecond=0)
+        expires_at = (unlock_at + timedelta(minutes=EXPIRY_GAP_MINUTES)).replace(microsecond=0)
+        create_payload["unlock_at"] = format_utc_datetime(unlock_at)
+        create_payload["expires_at"] = format_utc_datetime(expires_at)
         log(f"Create rejected; retrying with unlock_at={create_payload['unlock_at']}")
         secret = api_request(base_url, "POST", "/secrets", data=create_payload)
 
     secret_id = secret["secret_id"]
+    created_unlock_at = parse_utc_datetime(secret["unlock_at"])
+    created_expires_at = parse_utc_datetime(secret["expires_at"])
     log(f"Secret created: id={secret_id}, unlock_at={secret['unlock_at']}")
 
     # Step 5: Check status via edit token
@@ -378,14 +417,90 @@ def run_full_smoke_test(base_url: str) -> bool:
         log("ERROR: Secret not found via edit token")
         return False
 
-    # With a short unlock (when allowed), the secret can flip to available quickly.
-    if status.get("status") not in ("pending", "available"):
-        log(f"ERROR: Unexpected edit status '{status.get('status')}'")
+    if status.get("status") != "pending":
+        log(f"ERROR: Expected status 'pending', got '{status.get('status')}'")
+        return False
+
+    status_unlock_at = parse_utc_datetime(status["unlock_at"])
+    status_expires_at = parse_utc_datetime(status["expires_at"])
+    if not assert_timestamps_match(
+        "Status timestamps do not match create response",
+        created_unlock_at,
+        created_expires_at,
+        status_unlock_at,
+        status_expires_at,
+    ):
         return False
 
     log(f"Status verified: exists={status['exists']}, status={status['status']}")
 
-    # Step 6: Check status via decrypt token (should not consume the secret)
+    # Step 6: Edit secret dates and re-check status remains pending
+    log("Editing secret dates via edit token")
+    new_unlock_at = (created_unlock_at + timedelta(minutes=5)).replace(microsecond=0)
+    new_expires_at = (created_expires_at + timedelta(minutes=5)).replace(microsecond=0)
+
+    if new_unlock_at >= new_expires_at:
+        log("ERROR: Computed invalid edited timestamps (unlock >= expiry)")
+        return False
+
+    if (new_expires_at - new_unlock_at) < timedelta(minutes=15):
+        log("ERROR: Computed invalid edited timestamps (gap < 15 minutes)")
+        return False
+
+    edited = api_request(
+        base_url,
+        "PUT",
+        "/secrets/edit",
+        headers={"Authorization": f"Bearer {edit_token}"},
+        data={
+            "unlock_at": format_utc_datetime(new_unlock_at),
+            "expires_at": format_utc_datetime(new_expires_at),
+        },
+    )
+
+    edited_unlock_at = parse_utc_datetime(edited["unlock_at"])
+    edited_expires_at = parse_utc_datetime(edited["expires_at"])
+    if not assert_timestamps_match(
+        "Edit response timestamps do not match request",
+        new_unlock_at,
+        new_expires_at,
+        edited_unlock_at,
+        edited_expires_at,
+    ):
+        return False
+
+    if edited_unlock_at <= created_unlock_at or edited_expires_at <= created_expires_at:
+        log("ERROR: Edit did not postpone timestamps as expected")
+        return False
+
+    log("Re-checking secret edit status after edit")
+    status2 = api_request(
+        base_url,
+        "GET",
+        "/secrets/edit/status",
+        headers={"Authorization": f"Bearer {edit_token}"},
+    )
+
+    if not status2.get("exists"):
+        log("ERROR: Secret not found via edit token after edit")
+        return False
+
+    if status2.get("status") != "pending":
+        log(f"ERROR: Expected status 'pending' after edit, got '{status2.get('status')}'")
+        return False
+
+    status2_unlock_at = parse_utc_datetime(status2["unlock_at"])
+    status2_expires_at = parse_utc_datetime(status2["expires_at"])
+    if not assert_timestamps_match(
+        "Status timestamps do not reflect edit",
+        edited_unlock_at,
+        edited_expires_at,
+        status2_unlock_at,
+        status2_expires_at,
+    ):
+        return False
+
+    # Step 7: Check status via decrypt token (should not consume the secret)
     log("Checking secret status via decrypt token")
     decrypt_status = api_request(
         base_url,
@@ -402,7 +517,7 @@ def run_full_smoke_test(base_url: str) -> bool:
         log(f"ERROR: Unexpected decrypt status '{decrypt_status.get('status')}'")
         return False
 
-    # Step 7: Check public status via secret ID and assert consistent status mapping
+    # Step 8: Check public status via secret ID and assert consistent status mapping
     log("Checking secret status via public ID endpoint")
     public_status = api_request(base_url, "GET", f"/secrets/{secret_id}/status")
 
