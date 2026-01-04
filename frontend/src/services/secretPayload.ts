@@ -111,6 +111,12 @@ export function decodeSecretPayload(payloadBytes: Uint8Array): SecretPayload {
   const headerLen = readU32BE(payloadBytes, offset)
   offset += 4
 
+  // Sanity check: header should never exceed 10MB (metadata only, not file contents)
+  const MAX_HEADER_SIZE = 10 * 1024 * 1024
+  if (headerLen > MAX_HEADER_SIZE) {
+    throw new Error('Invalid payload: header too large')
+  }
+
   if (payloadBytes.length < offset + headerLen) {
     throw new Error('Invalid payload: truncated header')
   }

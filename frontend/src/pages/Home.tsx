@@ -151,8 +151,9 @@ export default function Home() {
               type: file.type || 'application/octet-stream',
               bytes: new Uint8Array(await file.arrayBuffer()),
             }
-          } catch {
-            throw new Error(`Failed to read file: ${file.name}`)
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : 'unknown error'
+            throw new Error(`Failed to read file "${file.name}": ${reason}`)
           }
         }),
       )
@@ -260,6 +261,9 @@ export default function Home() {
     setStep('input')
     setMessage('')
     setFiles([])
+    if (attachmentInputRef.current) {
+      attachmentInputRef.current.value = ''
+    }
     setCapabilityToken('')
     setShowCapabilityToken(false)
     setUnlockPreset('now')
@@ -548,8 +552,7 @@ export default function Home() {
             {showCapabilityToken && (
               <input
                 id="capabilityToken"
-                type="text"
-                inputMode="text"
+                type="password"
                 autoComplete="off"
                 placeholder="Capability token (optional, for large files)"
                 value={capabilityToken}
