@@ -38,6 +38,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlparse
 from urllib.request import Request, urlopen
 
+SkipCheck = Callable[["SmokeContext"], str | None]
+
 
 class ApiError(RuntimeError):
     def __init__(self, status_code: int, body: str):
@@ -126,6 +128,7 @@ class HttpClient:
                     continue
                 raise RuntimeError(f"Network error after {attempt} attempts: {e}") from e
 
+        # Defensive safety net: loop should always return or raise above.
         raise RuntimeError(f"Unexpected HTTP client failure: {last_error!r}")
 
     def api_json(
@@ -468,7 +471,8 @@ class SmokeContext:
 class Step:
     name: str
     run: Callable[[SmokeContext], None]
-    skip_reason: Callable[[SmokeContext], str | None] | None = None
+    # Return `None` to run the step; return a string to skip with that reason.
+    skip_reason: SkipCheck | None = None
 
 
 @dataclass(frozen=True)
